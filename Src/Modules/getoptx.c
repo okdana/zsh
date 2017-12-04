@@ -32,7 +32,7 @@
 #include "getoptx.mdh"
 #include "getoptx.pro"
 
-#ifdef __GLIBC__
+#if defined(__GLIBC__) || defined(LIBC_MUSL)
 extern char *__progname;
 #endif
 
@@ -41,15 +41,17 @@ extern char *__progname;
 #define RET_BIN_ERR 2
 
 /**
- * Portably get the current program name.
+ * Portably get the current program name, if applicable.
  *
- * @return The current program name.
+ * @return The current program name. May be NULL on some systems.
  */
 
 static char *
 get_progname(void)
 {
-#ifdef __GLIBC__
+#if defined(__CYGWIN__) || defined(__UCLIBC__)
+    return NULL;
+#elif defined(__GLIBC__) || defined(LIBC_MUSL)
     return __progname;
 #else
     return (char *) getprogname();
@@ -57,7 +59,7 @@ get_progname(void)
 }
 
 /**
- * Portably set the current program name.
+ * Portably set the current program name, if applicable.
  *
  * @param The name to set.
  */
@@ -65,7 +67,9 @@ get_progname(void)
 static void
 set_progname(const char *name)
 {
-#ifdef __GLIBC__
+#if defined(__CYGWIN__) || defined(__UCLIBC__)
+    return;
+#elif defined(__GLIBC__) || defined(LIBC_MUSL)
     __progname = (char *) name;
 #else
     setprogname(name);
@@ -84,10 +88,10 @@ static char *
 strip_punct(const char *str)
 {
     int         i      = 0;
-    const char *ptr    = str;
     char       *newstr = zshcalloc(strlen(str) + 1);
+    const char *ptr    = str;
 
-    for ( /**/; *ptr; ptr++ ) {
+    for ( /**/; *ptr && *ptr != '\0'; ptr++ ) {
         if ( ! ispunct(*ptr) ) {
             newstr[i++] = *ptr;
         }
@@ -161,6 +165,8 @@ add_longopt(struct option **longopts, const char *name, int has_arg)
 
     struct option *ptr;
 
+    static int flag;
+
     len = strlen(name2);
 
     if ( len == 0 || name2[0] == '-' || name2[len - 1] == ':' ) {
@@ -183,10 +189,11 @@ add_longopt(struct option **longopts, const char *name, int has_arg)
     *longopts = realloc(*longopts, sizeof(struct option) * (i + 2));
 
     // Note: The `val` must be different for each option, or else
-    // ambiguous-option detection will behave strangely (i.e., fail)
+    // ambiguous-option detection will behave strangely (i.e., fail). Also, when
+    // we do this, we must provide a flag too
     (*longopts)[i].name        = name2;
     (*longopts)[i].has_arg     = has_arg;
-    (*longopts)[i].flag        = NULL;
+    (*longopts)[i].flag        = &flag;
     (*longopts)[i].val         = i + 1;
 
     (*longopts)[i + 1].name    = NULL;
@@ -222,7 +229,7 @@ add_longopt(struct option **longopts, const char *name, int has_arg)
 static int
 add_longopts(struct option **longopts, const char *optspec, int norm_punct) {
     int   ret      = 0;
-    char *optspec2 = ztrdup(optspec); // Copy to not change pointer position
+    char *optspec2 = ztrdup(optspec);
     char *tokenp   = strtok(optspec2, " \r\n\t|,");
 
     while ( tokenp ) {
