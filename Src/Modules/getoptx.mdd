@@ -1,0 +1,7 @@
+name=zsh/getoptx
+link=dynamic
+load=no
+
+autofeatures="b:getoptx"
+
+objects="getoptx.o"
