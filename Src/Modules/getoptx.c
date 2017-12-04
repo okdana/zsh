@@ -32,8 +32,57 @@
 #include "getoptx.mdh"
 #include "getoptx.pro"
 
+#ifdef __GLIBC__
+extern char *__progname;
+#endif
+
+#define RET_OK      0
+#define RET_LIB_ERR 1
+#define RET_BIN_ERR 2
+
+/**
+ * Portably get the current program name.
+ *
+ * @return The current program name.
+ */
+
 static char *
-strip_punct(const char *str) {
+get_progname(void)
+{
+#ifdef __GLIBC__
+    return __progname;
+#else
+    return (char *) getprogname();
+#endif
+}
+
+/**
+ * Portably set the current program name.
+ *
+ * @param The name to set.
+ */
+
+static void
+set_progname(const char *name)
+{
+#ifdef __GLIBC__
+    __progname = (char *) name;
+#else
+    setprogname(name);
+#endif
+}
+
+/**
+ * Strip any punctuation from a string and return the result.
+ *
+ * @param str The string to strip.
+ *
+ * @return The input string minus any punctuation. Caller must free.
+ */
+
+static char *
+strip_punct(const char *str)
+{
     int         i      = 0;
     const char *ptr    = str;
     char       *newstr = zshcalloc(strlen(str) + 1);
@@ -46,6 +95,16 @@ strip_punct(const char *str) {
 
     return newstr;
 }
+
+/**
+ * Build up parsed arg string.
+ *
+ * @param argstr Current (pre-allocated) arg string. Will be re-allocated.
+ * @param fmt    A format string suitable for printf(), &al.
+ * @param ...    Zero or more values to be used with the format string.
+ *
+ * @return 0 on success, >0 on error.
+ */
 
 static int
 build_argstr(char **argstr, const char *fmt, ...)
@@ -68,13 +127,30 @@ build_argstr(char **argstr, const char *fmt, ...)
 
     if ( left < 0 ) {
         free(buf);
-        return left;
+        return 1;
     }
 
     *argstr = appstr(*argstr, buf);
     free(buf);
-    return left;
+    return 0;
 }
+
+/**
+ * Add a long option to a long-options array.
+ *
+ * @param longopts
+ *   The long-options array to update. Will be re-allocated if necessary.
+ *
+ * @param name
+ *   The long-option name, with any special characters removed. A name with a
+ *   leading `-` or trailing `:` is invalid.
+ *
+ * @param has_arg
+ *   Whether the option takes an argument. Refer to getopt_long(3) for possible
+ *   values.
+ *
+ * @return 0 on success, >0 on error.
+ */
 
 static int
 add_longopt(struct option **longopts, const char *name, int has_arg)
@@ -106,10 +182,12 @@ add_longopt(struct option **longopts, const char *name, int has_arg)
 
     *longopts = realloc(*longopts, sizeof(struct option) * (i + 2));
 
+    // Note: The `val` must be different for each option, or else
+    // ambiguous-option detection will behave strangely (i.e., fail)
     (*longopts)[i].name        = name2;
     (*longopts)[i].has_arg     = has_arg;
     (*longopts)[i].flag        = NULL;
-    (*longopts)[i].val         = 0;
+    (*longopts)[i].val         = i + 1;
 
     (*longopts)[i + 1].name    = NULL;
     (*longopts)[i + 1].has_arg = 0;
@@ -118,6 +196,28 @@ add_longopt(struct option **longopts, const char *name, int has_arg)
 
     return 0;
 }
+
+/**
+ * Add long options from a long-option spec provided at the command line.
+ *
+ * @param longopts
+ *   The long-options array to update. Will be passed to add_longopt() where
+ *   necessary.
+ *
+ * @param optspec
+ *   The long-option spec provided at the command line. Multiple long options
+ *   may be separated with white space, commas, or pipes. Each long option may
+ *   optionally begin with two hyphens. A long option ending with a single colon
+ *   indicates a required argument, whilst two colons indicate an optional
+ *   argument.
+ *
+ * @param norm_punct
+ *   Whether to normalise punctuation in the added options. If >0 and an option
+ *   contains punctuation (e.g., `foo-bar`), an additional option will be added
+ *   without the punctuation.
+ *
+ * @return 0 on success, >0 on error.
+ */
 
 static int
 add_longopts(struct option **longopts, const char *optspec, int norm_punct) {
@@ -167,40 +267,48 @@ add_longopts(struct option **longopts, const char *optspec, int norm_punct) {
     }
 
     free(optspec2);
-
     return ret;
 }
 
-/*
+/**
+ * Implement `getoptx` built-in.
+ *
  * usage: getoptx [<options>] <shortopts> [<arg> ...]
  *
  * options:
  *   -A <array>    Assign result to array parameter <array>
  *   -c            Concatenate adjacent, same-optind numeric short options
- *   -e            Omit errors in result
+ *   -e            Omit errors in result (like getopt(1))
  *   -E            Abort immediately on parse error
  *   -l <longopt>  Define long option(s)
  *   -n <name>     Set name used for error messages
  *   -p            Normalise punctuation in long options
- *   -q            Suppress error messages (same as <shortopts> prefixed with ':')
+ *   -q            Suppress error messages (same effect as prefixing <shortopts>
+ *                 with `:`)
  *   -s <scalar>   Assign result to scalar parameter <scalar>
  *
  * operands:
- *   <shortopts>   Short-option spec string (required)
+ *   <shortopts>   Short-option spec string. This argument is required; use an
+ *                 empty string if no short options should be defined
  *   <arg> ...     Zero or more arguments to use as input; positional parameters
  *                 are used if not supplied
+ *
+ * return codes:
+ *   0  Argument parsing was successful.
+ *   1  Argument parsing failed.
+ *   2  An illegal option was provided to the built-in itself, or some other
+ *      usage or internal error occurred.
  */
 
 /**/
 static int
 bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 {
-    int ret             = 0;
+    int ret             = RET_OK;
     int concat_nums     = 0; // -c
     int err_elide       = 0; // -e
     int err_abort       = 0; // -E
     int norm_punct      = 0; // -p
-    int quiet           = 0; // :-prefixed shortopts
     int longoptsi       = 0;
     int argc            = 0;
     int opt             = -1;
@@ -220,6 +328,8 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
     char **argp      = NULL;
     char **argv      = NULL;
 
+    const char *old_progname = get_progname();
+
     struct option *longopts = zshcalloc(sizeof(struct option));
 
     for ( /**/; *args && **args == '-'; args++ ) {
@@ -237,7 +347,7 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
                     if ( arg[1] ) {
                         arrname = arg + 1;
                     } else if ( !(arrname = *++args) ) {
-                        ret = 2;
+                        ret = RET_BIN_ERR;
                         goto internal_optarg_expected;
                     }
                     goto internal_next_arg;
@@ -262,7 +372,7 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
                     if ( arg[1] ) {
                         longopt = arg + 1;
                     } else if ( !(longopt = *++args) ) {
-                        ret = 2;
+                        ret = RET_BIN_ERR;
                         goto internal_optarg_expected;
                     }
                     // @todo Is this stupid? lol
@@ -277,7 +387,7 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
                     if ( arg[1] ) {
                         name = arg + 1;
                     } else if ( !(name = *++args) ) {
-                        ret = 2;
+                        ret = RET_BIN_ERR;
                         goto internal_optarg_expected;
                     }
                     goto internal_next_arg;
@@ -289,7 +399,7 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 
                 // Suppress error messages
                 case 'q':
-                    quiet = 1;
+                    opterr = 0;
                     break;
 
                 // Assign parsed arguments to scalar
@@ -297,14 +407,14 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
                     if ( arg[1] ) {
                         scaname = arg + 1;
                     } else if ( !(scaname = *++args) ) {
-                        ret = 2;
+                        ret = RET_BIN_ERR;
                         goto internal_optarg_expected;
                     }
                     goto internal_next_arg;
 
                 // Illegal option
                 default:
-                    ret = 2;
+                    ret = RET_BIN_ERR;
                     goto internal_option_invalid;
             }
 
@@ -313,9 +423,10 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
         }
     }
 
+    // Add long options, accounting for norm_punct
     while ( --longoptsi >= 0 ) {
         if ( add_longopts(&longopts, *longoptsp, norm_punct) ) {
-            ret = 2;
+            ret = RET_BIN_ERR;
             goto internal_longopt_invalid;
         }
         longoptsp++;
@@ -323,17 +434,14 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 
     // Missing short optspec
     if ( !*args ) {
-        ret = 1;
+        ret = RET_BIN_ERR;
         goto internal_operand_expected;
     }
 
-    // getopt_long()'s own error messages are dumb, so we'll always suppress
-    // them, but we'll respect the user's wishes with our own messages
-    if ( **args == ':' ) {
-        quiet     = 1;
-        shortopts = ztrdup(*args);
+    // Prepend : to short-opt spec if we got -q
+    if ( opterr == 0 && **args != ':' ) {
+        shortopts = bicat(":", *args);
     } else {
-        //shortopts = bicat(":", *args);
         shortopts = ztrdup(*args);
     }
 
@@ -347,10 +455,7 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
         name = scriptname ? scriptname : (argzero ? argzero : nam);
     }
 
-#if !defined(__linux__) && !defined(__GLIBC__) && !defined(LIBC_MUSL)
-    const char *oldprogname = getprogname();
-    setprogname(name);
-#endif
+    set_progname(name);
 
     // Use positional parameters if none were supplied to the command
     argp = args[1] ? args + 1 : pparams;
@@ -386,68 +491,22 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 
         // Missing argument
         if ( opt == ':' ) {
+            ret = RET_LIB_ERR;
+
             if ( ! err_elide ) {
                 build_argstr(&argstr, " ':'");
             }
-
-            if ( !quiet ) {
-                if ( optopt ) {
-                    fprintf(
-                        stderr,
-                        "%s: option requires an argument: -%c\n",
-                        name ? name : nam,
-                        optopt
-                    );
-                } else {
-                    fprintf(
-                        stderr,
-                        "%s: option requires an argument: %s\n",
-                        name ? name : nam,
-                        argv[optind - 1]
-                    );
-                }
-            }
-
-            ret = 1;
-
             if ( err_abort ) {
                 goto done;
             }
 
         // Illegal option
         } else if ( opt == '?' ) {
+            ret = RET_LIB_ERR;
+
             if ( ! err_elide ) {
                 build_argstr(&argstr, " '?'");
             }
-
-            if ( !quiet ) {
-                if ( optopt ) {
-                    fprintf(
-                        stderr,
-                        "%s: invalid option: -%c\n",
-                        name ? name : nam,
-                        optopt
-                    );
-                } else {
-                    fprintf(
-                        stderr,
-                        "%s: invalid option: %s\n",
-                        name ? name : nam,
-                        argv[optind - 1]
-                    );
-                }
-
-                fprintf(
-                    stderr,
-                    "opt: %c, optopt: %c, longind: %c\n",
-                    opt,
-                    optopt,
-                    longind
-                );
-            }
-
-            ret = 1;
-
             if ( err_abort ) {
                 goto done;
             }
@@ -526,7 +585,7 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
                 // The wording/behaviour here matches assignaparam(), &al.
                 zerr("not an identifier: %s", arrname);
                 errflag |= ERRFLAG_ERROR;
-                ret = 2;
+                ret = RET_BIN_ERR;
             } else {
                 char *tmp = zshcalloc(
                     strlen(argstr) + strlen(arrname) + strlen("=(...)") + 1
@@ -547,7 +606,7 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
         // Assign to scalar
         } else if ( scaname ) {
             if ( !setsparam(scaname, ztrdup(argstr + 1)) ) {
-                ret = 2;
+                ret = RET_BIN_ERR;
             }
 
         // Print to stdout
@@ -555,9 +614,7 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
             fprintf(stdout, "%s\n", argstr + 1);
         }
 
-#if !defined(__linux__) && !defined(__GLIBC__) && !defined(LIBC_MUSL)
-    setprogname(oldprogname);
-#endif
+        set_progname(old_progname);
 
         if ( argv ) {
             free(argv);
