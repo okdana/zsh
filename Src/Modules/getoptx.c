@@ -3,7 +3,7 @@
  *
  * This file is part of zsh, the Z shell.
  *
- * Copyright (c) 2017 dana geier
+ * Copyright (c) 2017 dana
  * All rights reserved.
  *
  * Permission is hereby granted, without written agreement and without
@@ -12,16 +12,16 @@
  * purpose, provided that the above copyright notice and the following
  * two paragraphs appear in all copies of this software.
  *
- * In no event shall dana geier or the Zsh Development Group be liable
+ * In no event shall dana or the Zsh Development Group be liable
  * to any party for direct, indirect, special, incidental, or consequential
  * damages arising out of the use of this software and its documentation,
- * even if dana geier and the Zsh Development Group have been advised of
+ * even if dana and the Zsh Development Group have been advised of
  * the possibility of such damage.
  *
- * dana geier and the Zsh Development Group specifically disclaim any
+ * dana and the Zsh Development Group specifically disclaim any
  * warranties, including, but not limited to, the implied warranties of
  * merchantability and fitness for a particular purpose.  The software
- * provided hereunder is on an "as is" basis, and dana geier and the
+ * provided hereunder is on an "as is" basis, and dana and the
  * Zsh Development Group have no obligation to provide maintenance,
  * support, updates, enhancements, or modifications.
  *
@@ -449,6 +449,9 @@ bin_getoptx(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
     if ( opterr == 0 && **args != ':' ) {
         shortopts = bicat(":", *args);
     } else {
+        if ( **args == ':' ) {
+            opterr = 0;
+        }
         shortopts = ztrdup(*args);
     }
 
