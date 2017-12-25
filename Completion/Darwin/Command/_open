@@ -1,5 +1,14 @@
 #compdef open
 
+# Notes:
+# - open(1) says that -f opens the result in the default text editor. This is
+#   not true; the result is always opened in TextEdit unless another option is
+#   supplied to override it
+# - We no longer try to restrict files to those associated with the specified
+#   app; this was a cute feature, but one that is unreliable in 2017
+# - An apparent completion bug prevents --args from actually doing what it's
+#   supposed to in the case of `open somefile --args <tab>`
+
 _open_absolute_application_path() {
   local expl curcontext
   zstyle -T ":completion:${curcontext}:files" prefix-needed && \
@@ -8,34 +17,108 @@ _open_absolute_application_path() {
 }
 
 _open() {
-  local curcontext="$curcontext" state line expl
+  local curcontext=$curcontext app ret=1
+  local -a context line state state_descr tmp
+  local -A opt_args val_args
 
-  _arguments -C \
-    '-a[specify application]: :->open_mac_applications' \
-    '-e[open with TextEdit]' \
-    '-f[reads input from standard input and opens with TextEdit]' \
-    '*: :->open_files'
+  _arguments -s -C : \
+    '(-a -b -e -f -R -t)-a[specify application name]: :->applications' \
+    '(: -)--args[pass remaining arguments to application]:*:::argument' \
+    '(-a -b -e -f -R -t)-b[specify application bundle identifier]: :->bundle-ids' \
+    '(-a -b -e -f -R -t)-e[open with TextEdit]' \
+    '(-R)-F[open application with fresh state]' \
+    '(-h)-f[open standard input with TextEdit or specified application]' \
+    '-g[do not bring application to foreground]' \
+    '(-f)-h[open header file]' \
+    '(-R)-n[always open new instance of application]' \
+    '(-F)-R[reveal in Finder]' \
+    '(-R)-s[specify SDK name/version]: :->sdks' \
+    '(-a -b -e -f -R -t)-t[open with default text editor]' \
+    '(-R)-W[wait for application to exit]' \
+    '(-f)*: :->files' \
+  && ret=0
 
-  case "$state" in
-    open_mac_applications)
+  case $state in
+    applications)
       _alternative \
         "commands: :_mac_applications" \
-        "files:: _open_absolute_application_path"
+        "files:: _open_absolute_application_path" \
+      && ret=0
       ;;
-    open_files)
-      local app
-      if [[ -n "$words[(r)-a]" ]]; then
-        app="${(Q)words[words[(i)-a] + 1]}"
-      elif [[ -n "$words[(r)-e]" || -n "$words[(r)-f]" ]]; then
-        app="Text Edit"
-      fi
-      if [[ -n "$app" ]]; then
-        _wanted files expl "file for $app" _mac_files_for_application "$app"
+    bundle-ids)
+      # This isn't perfect, but should be pretty close, and relatively fast
+      tmp=( /Applications/*.app/(N) /Applications/*/*.app/(N) )
+      tmp=( ${(0)"$(
+        _call_program bundle-ids mdls -rn kMDItemCFBundleIdentifier ${(q)tmp}
+      )"} )
+      tmp=( ${tmp##\(null\)} )
+      _values 'bundle identifier' $tmp com.apple.TextEdit && ret=0
+      ;;
+    files)
+      (( $+opt_args[-h] )) && {
+        tmp=(
+          /System/Library/Frameworks/*/Headers/*.h(-.N:t)
+          /usr/local/include/**/*.h(-.N:t)
+          /usr/include/**/*.h(-.N:t)
+        )
+        _describe 'header file' tmp
+        return
+      }
+
+      # All of this is here just so we can put the app name in the description;
+      # this seems helpful, but maybe it's over-kill?
+      case ${${opt_args[(I)-[abeft]]}[-1]} in
+        -a)
+          if [[ $opt_args[-a] == (\$\'|\'|\") ]]; then
+            app=${(Q)opt_args[-a]}
+          else
+            app=${(Q)${(Q)opt_args[-a]}}
+          fi
+          ;;
+        -b)
+          if [[ $opt_args[-b] == (\$\'|\'|\") ]]; then
+            app=${(Q)opt_args[-b]}
+          else
+            app=${(Q)${(Q)opt_args[-b]}}
+          fi
+          app=$(
+            _call_program app-name osascript \
+              -e ${(q):-"name of app id ${(qqq)app}"}
+          )
+          ;;
+        -t)
+          # This is a bit silly, perhaps
+          app=$(
+            # .txt is the important part here
+            tmp=${${TMPDIR:-/tmp}%/}/zsh.$$.$RANDOM.txt
+            touch $tmp
+            _call_program default-editor osascript -e ${(q):-"
+              tell application \"System Events\" to ¬
+                get name of default application of file ${(qqq)tmp}
+            "}
+            rm -f $tmp
+          )
+          app=${app%.app}
+          ;& # Fall through in case we didn't find our editor
+        -e|-f)
+          : ${app:=TextEdit}
+          ;;
+      esac
+
+      _alternative "files:file${app:+ for $app}:_files" 'urls:URL:_urls' &&
+      ret=0
+      ;;
+    sdks)
+      tmp=( /Library/Developer/CommandLineTools/SDKs/*.*.sdk(N:t:r) )
+      if (( $#tmp )); then
+        _describe 'SDK name/version' tmp && ret=0
       else
-        _webbrowser
+        _message 'SDK name/version' && ret=0
       fi
       ;;
   esac
+
+  return ret
 }
 
 _open "$@"
