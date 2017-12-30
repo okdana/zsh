@@ -1,0 +1,38 @@
+#compdef busybox
+
+local curcontext=$curcontext
+local -a context line state state_descr tmp
+local -A opt_args val_args
+
+_arguments -C : \
+  '(* -)--help[display help information]' \
+  '(: -)--list[list supported applets]' \
+  '(: -)--list-full[list supported applets with paths]' \
+  '(: -)--install[install links to applets]:*::: := ->install' \
+  '(-)1: :->applets' \
+  '(-)*:: :->arguments' \
+&& return 0
+
+case $state in
+  applets)
+    tmp=( ${${(f)"$( _call_program applets $service --list )"}//\[/\\[} )
+    if (( $#tmp )); then
+      _values applet $tmp && return 0
+    else
+      _message applet && return 0
+    fi
+    ;;
+  arguments)
+    # Temporarily override what _pick_variant thinks this command's variant is
+    # (since the command in PATH may not be the BusyBox one). Note that most
+    # completion functions aren't actually designed with BusyBox in mind
+    (( $+_cmd_variant )) || typeset -gA _cmd_variant
+    _cmd_variant[${words[1]}]=busybox _normal && return 0
+    ;;
+  install)
+    _arguments -C : '-s[use symlinks]' ':install directory:_directories'
+    return
+    ;;
+esac
+
+return 1
