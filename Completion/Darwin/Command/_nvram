@@ -15,7 +15,9 @@ _arguments -s : \
 && ret=0
 
 [[ $state == variables-* ]] && {
-  tmp=( ${${(f)"$( command $service -p )"}%%[[:space:]]*} )
+  tmp=( ${${(f)"$(
+    _call_program nvram-variables $words[1] -p
+  )"}%%[[:space:]]*} )
 
   [[ $state == variables-rw ]] &&
   tmp=( ${^tmp}'::NVRAM variable value' )
