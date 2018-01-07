@@ -1100,6 +1100,7 @@ setupvals(char *cmd, char *runscript, char *zsh_name)
     }
 
     oldpwd = ztrdup(pwd);  /* initialize `OLDPWD' = `PWD' */
+    initpwd = ztrdup(pwd);
 
     inittyptab();     /* initialize the ztypes table */
     initlextabs();    /* initialize lexing tables    */
@@ -1111,6 +1112,8 @@ setupvals(char *cmd, char *runscript, char *zsh_name)
     createbuiltintable();   /* create hash table for builtin commands  */
     createnameddirtable();  /* create hash table for named directories */
     createparamtable();     /* create parameter hash table             */
+
+    setsparam("INITPWD", ztrdup(initpwd));
 
     condtab = NULL;
     wrappers = NULL;

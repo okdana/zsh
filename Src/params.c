@@ -44,6 +44,13 @@
 #endif
 #endif
 
+/* Used to get ZSH_EXECUTABLE_PATH */
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#elif defined(__FreeBSD__) || defined(__DragonFly__) || defined(__NetBSD__)
+#include <sys/sysctl.h>
+#endif
+
 /* what level of localness we are at */
  
 /**/
@@ -70,8 +77,10 @@ char **path,		/* $path        */
 mod_export
 char *argzero,		/* $0           */
      *posixzero,	/* $0           */
+     *execpath,		/* $ZSH_EXECUTABLE_PATH */
      *home,		/* $HOME        */
      *nullcmd,		/* $NULLCMD     */
+     *initpwd,		/* $INITPWD     */
      *oldpwd,		/* $OLDPWD      */
      *zoptarg,		/* $OPTARG      */
      *prompt,		/* $PROMPT      */
@@ -217,6 +226,8 @@ static const struct gsu_integer ttyidle_gsu =
 
 static const struct gsu_scalar argzero_gsu =
 { argzerogetfn, argzerosetfn, nullunsetfn };
+static const struct gsu_scalar execpath_gsu =
+{ execpathgetfn, execpathsetfn, stdunsetfn };
 static const struct gsu_scalar username_gsu =
 { usernamegetfn, usernamesetfn, stdunsetfn };
 static const struct gsu_scalar dash_gsu =
@@ -315,6 +326,7 @@ IPDEF2("IFS", ifs_gsu, PM_DONTIMPORT | PM_RESTRICTED),
 IPDEF2("_", underscore_gsu, PM_DONTIMPORT),
 IPDEF2("KEYBOARD_HACK", keyboard_hack_gsu, PM_DONTIMPORT),
 IPDEF2("0", argzero_gsu, 0),
+IPDEF2("ZSH_EXECUTABLE_PATH", execpath_gsu, PM_DONTIMPORT),
 
 #ifdef USE_LOCALE
 # define LCIPDEF(name) IPDEF2(name, lc_blah_gsu, PM_UNSET)
@@ -4669,6 +4681,132 @@ argzerogetfn(UNUSED(Param pm))
     if (isset(POSIXARGZERO))
 	return posixzero;
     return argzero;
+}
+
+/* Function to set value for special parameter `ZSH_EXECUTABLE_PATH' */
+
+/**/
+static void
+execpathsetfn(UNUSED(Param pm), char *x)
+{
+    zsfree(execpath);
+    execpath = ztrdup(x ? x : "");
+    zsfree(x);
+}
+
+/* Function to get value for special parameter `ZSH_EXECUTABLE_PATH'.
+ *
+ * We only define this on demand, because it's not information that's often
+ * needed, and getting it may require several calls to the OS / file system.
+ *
+ * Note that not all operating systems provide a means to accurately obtain the
+ * real path to the process executable. As a result, this will not be very
+ * useful on some platforms. Most of them are rather esoteric (AIX, Haiku, &c.)
+ * — though unfortunately OpenBSD is also included in that list (as of 2018).
+ *
+ * Obviously the value this returns will not be accurate if someone moves or
+ * deletes the zsh binary whilst the shell is running, or if the path to the zsh
+ * binary is extraordinarily long. Solution: don't do that.
+ */
+
+/**/
+static char *
+execpathgetfn(UNUSED(Param pm))
+{
+    if (!execpath || !*execpath) {
+	int err = 1;
+	char *eptmp = NULL;
+
+#if defined(__APPLE__)
+	uint32_t alen = 1;
+	char atmp[alen];
+
+	(void)_NSGetExecutablePath(atmp, &alen);
+
+	/* No attempt is made to fill the buffer if it's not big enough */
+	if (alen <= PATH_MAX * 2)
+	    err = _NSGetExecutablePath((eptmp = zalloc(alen)), &alen);
+
+/* Recent versions of DragonFly, FreeBSD, NetBSD, &c. */
+#elif defined(KERN_PROC_PATHNAME)
+	size_t blen = 0;
+	int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
+
+	if (!sysctl(mib, 4, NULL, &blen, NULL, 0) && blen) {
+	    eptmp = zalloc(blen > PATH_MAX * 2 ? PATH_MAX * 2 : blen);
+	    err = sysctl(mib, 4, eptmp, &blen, NULL, 0);
+	}
+
+/* Recent versions of Solaris have procfs (/proc/self/path/a.out), but this is
+ * available on older versions too */
+#elif defined(__sun__)
+	const char *stmp = getexecname();
+
+	/* This was the first argument to exec*(), so it might be relative to
+	 * the caller's CWD at the time */
+	eptmp = *stmp == '/' ? ztrdup(stmp) : tricat(initpwd, "/", stmp);
+	err = 0;
+
+#else
+#if defined(__linux__)
+	char *procpath = "/proc/self/exe";
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
+	char *procpath = "/proc/curproc/file";
+#elif defined(__NetBSD__)
+	char *procpath = "/proc/curproc/exe";
+#else
+	char *procpath = "";
+#endif
+
+	if (*procpath) {
+	    ssize_t plen;
+
+	    /* We probably can't size this dynamically because procfs will just
+	     * give 0 back to lstat() */
+	    eptmp = zalloc(PATH_MAX + 1);
+
+	    if ((plen = readlink(procpath, eptmp, PATH_MAX)) >= 0) {
+		eptmp[plen] = '\0';
+		err = 0;
+	    }
+	}
+#endif
+
+	/* If we've failed to accurately determine the path, we'll fall back to
+	 * argv[0]. This is not in any way reliable, but it will handle some
+	 * cases at least */
+	if (err || !eptmp || *eptmp != '/') {
+	    DPUTS(1, "executable path not found; falling back to argv[0]");
+	    zsfree(eptmp);
+	    eptmp = *posixzero == '/' ?
+		ztrdup(posixzero) : tricat(initpwd, "/", posixzero);
+	}
+
+	err = 1;
+
+/* If we got the path from procfs it's probably already fully resolved, but we
+ * definitely need this in the other cases */
+#ifdef REALPATH_ACCEPTS_NULL
+	char *real;
+	if ((real = realpath(eptmp, NULL))) {
+	    execpath = ztrdup_metafy(real);
+	    zsfree(real);
+	    err = 0;
+	}
+#elif HAVE_REALPATH
+	char *real[PATH_MAX + 1];
+	if (realpath(eptmp, real)) {
+	    execpath = ztrdup_metafy(real);
+	    err = 0;
+	}
+#endif
+
+	if (err)
+	    execpath = ztrdup_metafy(eptmp);
+	zsfree(eptmp);
+    }
+
+    return execpath;
 }
 
 /* Function to get value for special parameter `HISTSIZE' */
