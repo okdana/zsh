@@ -1,72 +1,265 @@
-#compdef shutdown
+#compdef fastboot=reboot fasthalt=halt halt reboot openrc-shutdown poweroff shutdown
 
-local -a args
+# Notes:
+# - BusyBox has no `shutdown`
+# - Darwin and some BSDs have no `poweroff`
+# - Darwin and BSD `shutdown` also accepts the option - (a single hyphen) to
+#   take a message on stdin, but it seems irritating to complete (@todo?)
+# - OpenRC usually co-exists with power commands from other init systems (most
+#   commonly BusyBox)
+# - We don't support the old BSD `shutdown` that Solaris used to have (and some
+#   of its descendants may still have?) under /usr/ucb
+# - `fastboot` and `fasthalt` are identical to `reboot` and `halt` respectively
+# - `reboot` is not to be confused with `restart`, which is used with Upstart to
+#   restart init jobs
 
-if [[ -d /etc/systemd ]]; then
-  _arguments \
-    '--help[display usage information]' \
-    '(-H --halt)'{-H,--halt}'[halt the machine]' \
-    '(-P --poweroff -h)'{-P,--poweroff,-h}'[power-off the machine (default)]' \
-    '(-r --reboot)'{-r,--reboot}'[reboot the machine]' \
-    "(--no-wall)-k[don't shutdown, just write wall message]" \
-    "(-k)--no-wall[don't send a wall message]" \
-    '-c[cancel pending shutdown]' \
-    '1: :_guard "^-*" "time (now/hh\:mm/+mins)"' \
-    '*:warning message'
+local -a context line state state_descr
+local -a tmp all_args sd_args nosd_args ht_args po_args rb_args
+local -A opt_args
+
+# Actually calling power commands may be dangerous, even with --version, so we
+# don't want to use _pick_variant here. It would be nice to be able to complete
+# the busybox multi-call, though, and _busybox handles this by overriding the
+# service variant in _cmd_variant...
+[[ -n $_cmd_variant[$service] ]] || {
+  (( $+_cmd_variant )) || typeset -gA _cmd_variant
+
+  _cmd_variant[$service]=$OSTYPE
+
+  if [[ $service == openrc* ]] || [[ ${${service:c}:A} == *openrc* ]]; then
+    _cmd_variant[$service]+=-openrc
+  elif [[ $OSTYPE == linux* ]] && [[ ${${service:c}:A} == *busybox* ]]; then
+    _cmd_variant[$service]+=-busybox
+  elif [[ $OSTYPE == linux* ]] && (( $+commands[systemctl] )); then
+    _cmd_variant[$service]+=-systemd
+  elif [[ $OSTYPE == linux* ]] && (( $+commands[initctl] )); then
+    _cmd_variant[$service]+=-upstart
+  fi
+}
+
+# `poweroff` on these systems either doesn't exist or doesn't take arguments
+[[ $service == poweroff ]] &&
+[[ $OSTYPE == (darwin|dragonfly|freebsd|openbsd)* ]] && {
+  _default
   return
-fi
+}
 
-case $OSTYPE in
-  *bsd*|dragonfly*|linux*|darwin*)
-    args=(
-      '-h[halt the system after shutdown]'
-      '-r[reboot the system]'
-      '-k[kick everybody off]'
-      '-n[prevent file system cache from being flushed]'
-      '1: :_guard "^-*" "time (now/hh\:mm/+mins)"'
-      '*:warning message'
+case $_cmd_variant[$service] in
+  *busybox*) # See also: _busybox
+    nosd_args+=(
+      '(: -)--help[display help information]'
+      # This works even with -w
+      '-d+[specify delay interval]:delay interval (seconds)'
+      # -f and -n of these are accepted with -w, but have no effect
+      '(-w)-f[shut down without signalling init]'
+      '(-w)-n[do not sync before shutdown]'
+      # This is only documented for `halt`, but seems to work in any case
+      '(-f -n)-w[write wtmp entry only (do not halt)]'
     )
-  ;|
-  *bsd*|dragonfly*)
-    args+=(
-      '-p[turn off power after shutdown]'
+    ;;
+  *-systemd)
+    all_args+=(
+      '(: -)--help[display help information]'
+      '--no-wall[do not send wall message]'
     )
-  ;|
-  (net|open)bsd*)
-    args+=(
-      '-d[cause system to perform a dump]'
-      '-f[create /fastboot so that file systems will not be checked during the next boot]'
+    nosd_args+=(
+      '(-d -w --no-wtmp --wtmp-only)'{-d,--no-wtmp}'[do not write wtmp entry]'
+      '(-w -f --force --wtmp-only)'{-f,--force}'[shut down without signalling init]'
+      '(-p -w --halt --poweroff --reboot)--halt[halt system]'
+      '(-p -w --halt --poweroff --reboot)'{-p,--poweroff}'[power off system]'
+      '(-p -w --halt --poweroff --reboot)--reboot[reboot system]'
+      '(-d -w --no-wtmp --wtmp-only)'{-w,--wtmp-only}'[write wtmp entry only (do not shut down)]'
     )
-  ;|
-  freebsd*|dragonfly*)
-    args+=(
-      '-o[execute halt or reboot instead of sending a signal to init]'
+    sd_args+=(
+      '(-c -H -h -P -r --halt --poweroff --reboot)'{-H,--halt}'[halt system]'
+      '(-c -H -h -P -r --halt --poweroff --reboot)'{-h,-P,--poweroff}'[power off system]'
+      '(-c -H -h -P -r --halt --poweroff --reboot)'{-r,--reboot}'[reboot system]'
+      '(-c -H -h -P -r --halt --poweroff --reboot)-c[cancel pending shutdown]'
+      '-k[send warnings only (do not shut down)]'
+      '1: :_guard "^-*" "time (now, +m, hh\:mm)"'
+      '*:: :_guard "^-*" message'
     )
-  ;;
-  netbsd*)
-    args+=(
-      '-b[specify boot string to pass to reboot]:boot string'
-      '-v[enable verbose console messages]'
-      '-x[enable debug console messages]'
-      '-z[silence some console messages]'
-      '-D[prevent shutdown from detaching from the tty]'
+    ;;
+  *-upstart)
+    all_args+=(
+      '(: -)--help[display help information]'
+      '(-q --quiet)'{-q,--quiet}'[reduce output verbosity]'
+      '(-v --verbose)'{-v,--verbose}'[increase output verbosity]'
+      '(: -)--version[display version information]'
     )
-  ;;
-  darwin*)
-    args+=(
-      '-o[execute halt or reboot instead of sending a signal to launchd]'
-      '-s[put the system to sleep]'
-      '-u[with -h, wait 5 minutes before removing power]'
+    nosd_args+=(
+      '(-w -f --force --wtmp-only)'{-f,--force}'[shut down without signalling init]'
+      '(-n --no-sync)'{-n,--no-sync}'[do not sync before shutdown]'
+      '--verbose[increase output verbosity]'
+      '(-w --wtmp-only)'{-w,--wtmp-only}'[write wtmp entry only (do not shut down)]'
     )
-  ;;
-  solaris2.<11->) args=( '(-i)-r[reboot]' ) ;&
+    ht_args+=(
+      '(-w --wtmp-only)'{-p,--poweroff}'[power off system]'
+    )
+    sd_args+=(
+      '(-c -H -h -P -r)-c[cancel pending shutdown]'
+      '(-c -H -h -P -r)-H[halt system]'
+      '(-c -H -h -P -r)-h[halt or power off system]'
+      '(-c -H -h -P -r)-P[power off system]'
+      '-k[send warnings only (do not shut down)]'
+      '(-c -H -h -P -r)-r[reboot system]'
+      '1: :_guard "^-*" "time (now, +m, hh\:mm)"'
+      '*:: :_guard "^-*" message'
+    )
+    ;;
+  *-openrc)
+    # OpenRC only provides `openrc-shutdown`, which behaves a little differently
+    # from the usual variants (and doesn't change based on argv[0])
+    tmp=(
+      -H -k -p -R -r -s -w
+      --halt --kexec --poweroff --reboot --reexec --single --write-only
+    )
+    all_args+=(
+      '(-D --dry-run)'{-D,--dry-run}'[display action to be taken only (do not shut down)]'
+      '(-d --no-write -w --write-only)'{-d,--no-write}'[do not write wtmp entry]'
+      "(${(j< >)tmp})"{-H,--halt}'[halt system]'
+      "(${(j< >)tmp})"{-k,--kexec}'[boot into new kernel loaded via kexec(8)]'
+      "(${(j< >)tmp})"{-p,--poweroff}'[power off system]'
+      "(${(j< >)tmp})"{-R,--reexec}'[re-exec openrc-init]'
+      "(${(j< >)tmp})"{-r,--reboot}'[reboot system]'
+      "(${(j< >)tmp})"{-s,--single}'[kill all processes and move to single-user mode]'
+      "(${(j< >)tmp} -d --no-write)"{-w,--write-only}'[write wtmp entry only (do not shut down)]'
+    )
+    ;;
   solaris*)
-    args+=(
-      '(-r)-i+[specify init-state]:init state:((0\:stop 1\:administrative s\:single\ user 5 6\:reboot))'
-      '-y[pre-answer yes to confirmation question]'
-      '-g+[specify grace period]:grace period (seconds) [60]'
+    nosd_args+=(
+      # The man page suggests this only applies to reboots, but that doesn't
+      # seem to be the case; the code also suggests that -d and -n are exclusive
+      '(-n)-d[dump core on shutdown]'
+      '-l[do not log shutdown event]'
+      '(-d)-n[do not sync before shutdown]'
+      '-q[shut down immediately and ungracefully]'
     )
-  ;;
+    ht_args+=(
+      '-y[allow shutdown even from dialup terminal]'
+    )
+    po_args+=( $ht_args )
+    tmp+=(
+      # The tool doesn't let you use the other init states, so we omit them
+      '0\:stop operating system'
+      '1\:enter administrative state'
+      '5\:shut down machine'
+      '6\:reboot operating system'
+      {s,S}'\:enter single-user state'
+    )
+    # Oracle Solaris 11+ gains `-r` as an alias for `-i6`. The `uname` check is
+    # to rule out Illumos distributions that report 2.11 but don't have this
+    [[ $OSTYPE == solaris2.<11-> ]] &&
+    [[ "$( _call_program unamev uname -v )" == <11->.* ]] &&
+    sd_args+=( '(-i)-r[reboot system]' )
+    sd_args+=(
+      '-g+[specify grace period (default: 60)]:grace period (seconds)'
+      "(-r)-i+[enter specified init state]:init state:((${(j< >)${(@qq)tmp}}))"
+      '-y[do not prompt for confirmation]'
+      '1:: :_guard "^-*" message'
+    )
+    ;;
+  *bsd*|darwin*|dragonfly*)
+    nosd_args+=(
+      '-l[do not log shutdown event]'
+      # FreeBSD disallows this with -d explicitly; i'm guessing the others don't
+      # intend for them to be used together either
+      '(-d -N)-n[do not sync before shutdown]'
+      '-q[shut down immediately and ungracefully]'
+    )
+    sd_args+=(
+      '(-k -p -r -s)-h[halt system]'
+      '(-h -n -o -p -r -s -u)-k[kick all users off and disable non-root logins]'
+      '(-d -k -s)-n[do not sync before shutdown (with -o)]'
+      '(-k -s)-o[shut down without signalling init]'
+      '(-h -k -n -o -p -s -u)-r[reboot system]'
+      # [[[yy]mm]dd]hh[:]mm is supported by all BSDs as well as Darwin (even
+      # though it's not mentioned in the man page); NetBSD also supports an
+      # optional century, and FreeBSD supports s/m/h modifiers to +m
+      '(-)1: :_guard "^-*" "time (now, +m, [[[yy]mm]dd]hh\:mm)"'
+      '(-)*::message'
+    )
+    ;| # MATCH AGAIN
+  darwin*)
+    all_args+=(
+      '(-k -r -s)-u[wait for UPS when halting]'
+    )
+    sd_args+=(
+      '(-h -k -n -o -r -u)-s[put system to sleep]'
+    )
+    ;;
+  *bsd*|dragonfly*)
+    sd_args+=(
+      '(-h -k -n -o -r -s -u)-p[power off system]'
+    )
+    ;| # MATCH AGAIN
+  freebsd*|dragonfly*)
+    nosd_args+=(
+      # FreeBSD's `nextboot` wants this to be the name of a directory (e.g.,
+      # the `kernel` in `/boot/kernel`), but i think it will accept full paths
+      '-k[use specified kernel on next boot]:kernel:_files'
+      '(-c -r)-p[power off system]'
+    )
+    rb_args+=(
+      '(-n -p)-d[dump core on reboot]'
+    )
+    ;| # MATCH AGAIN
+  netbsd*|openbsd*)
+    ht_args+=(
+      '-p[power off system]'
+    )
+    sd_args+=(
+      # The tool treats -f and -n as exclusive, though it's not documented
+      '(-n)-f[prevent fsck on next boot]'
+    )
+    ;| # MATCH AGAIN
+  freebsd*)
+    nosd_args+=(
+      '(-p -r)-c[power-cycle system]'
+      '(-n)-N[do not sync in userland before shutdown]'
+    )
+    rb_args+=(
+      '(-c -d -n -p)-r[kill processes, unmount file systems, and re-root]'
+    )
+    ;;
+  netbsd*)
+    # The tools allow these in any combination, though boothowto(9) says:
+    # >The use of flags that increase verbosity simultaneously with the use of
+    # >flags that decrease verbosity, is not well defined.
+    all_args+=(
+      '-v[enable verbose messages on console]'
+      '-x[enable debugging messages on console]'
+      '-z[silence some messages on console]'
+    )
+    nosd_args+=(
+      # Separated from `shutdown -d` because of the latter's implicit -r
+      '(-n)-d[dump core on shutdown]'
+    )
+    sd_args+=(
+      '-D[do not fork]'
+      '(-k -n)-d[dump core on shutdown (implies -r if -h/-p/-r not given)]'
+    )
+    # The man page says this is only relevant to certain hardware
+    [[ $MACHTYPE == *(sparc|sun)* ]] && sd_args+=(
+      '-b+[specify firmware boot arguments]:boot arguments'
+    )
+    ;;
+  openbsd*)
+    all_args+=(
+      '(-n)-d[dump core on shutdown]'
+    )
+    ;;
+  # If we're still looking for these, stop
+  *bsd*|dragonfly*) ;;
+  # We could probably assume that -h and -r will work with `shutdown`, but...
+  *) _default; return ;;
 esac
 
-_arguments $args
+case $service in
+  *shutdown*) _arguments -s -S : $all_args $sd_args; return ;;
+  *halt*)     _arguments -s -S : $all_args $nosd_args $ht_args; return ;;
+  *poweroff*) _arguments -s -S : $all_args $nosd_args $po_args; return ;;
+  *boot*)     _arguments -s -S : $all_args $nosd_args $rb_args; return ;;
+esac
+
+return 1
