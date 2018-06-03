@@ -9,12 +9,13 @@
 # - @todo It may be worthwhile to have _man_pages cache the pages it finds;
 #   section 3 in particular can be very slow to enumerate on some systems
 # - @todo Darwin supports HTML man pages; we don't
+# - @todo We don't support translated man pages (e.g. /usr/share/man/de/man1)
 
 _man() {
   local dirs expl mrd awk variant noinsert
   local -a context line state state_descr args modes
   local -aU sects
-  local -A opt_args val_args
+  local -A opt_args val_args sect_descs
 
   if [[ $service == man ]]; then
     # Treat mandoc-based systems (Alpine, Illumos, etc.) as OpenBSD
@@ -169,7 +170,7 @@ _man() {
   fi
 
   (( $#_manpath )) ||
-      _manpath=( /usr/man(-/) /(opt|usr)/(pkg|dt|share|X11R6|local)/(cat|)man(-/) )
+  _manpath=( /usr/man(-/) /(opt|usr)/(pkg|dt|share|X11R6|local)/(cat|)man(-/) )
 
   # Override man path
   [[ -n ${opt_args[-M]} ]] &&
@@ -219,9 +220,9 @@ _man() {
     sect=${sect//:/|}
   fi
 
-  if [[ $sect = (<->*|1M|l|n) || $sect = *\|* ]]; then
+  if [[ $sect = (<->[A-Za-z]#|[lnox]) || $sect = *\|* ]]; then
     for sect in ${(s.|.)sect}; do
-      if [[ $sect == (<->[cEFMmpS]#|l|n) ]]; then
+      if [[ $sect == (<->[A-Za-z]#|[lnox]) ]]; then
         sects+=( $sect )
       else
         sects+=( ${sect%%[^0-9]#} )
@@ -241,29 +242,90 @@ _man() {
   dirs=( ${dirs:#*/man-index/} )
   sects=( ${(o)${dirs##*(man|cat)}%/} )
 
+  # If we've got this far, we can build our look-up table for common section
+  # descriptions (we won't worry about super esoteric ones)
+  (( $#sects )) && () {
+    sect_descs=(
+      0  'library headers'
+      1  'general commands'
+      1m 'maintenance commands' # Solaris
+      1M 'maintenance commands' # Solaris
+      1t 'Tcl/Tk features' # Solaris
+      2  'system calls'
+      3  'library functions'
+      3c 'C library functions' # Solaris
+      3f 'Fortran library functions' # Solaris
+      4  'special files'
+      5  'file formats / conventions'
+      6  'games'
+      7  'miscellanea'
+      8  'administration commands'
+      9  'kernel features'
+      l  'local documentation' # AIX, etc.
+      n  'new documentation' # AIX, etc.
+      o  'old documentation' # AIX, etc.
+      x  'X11 features'
+    )
+
+    # Add POSIX variants
+    for 1 in ${(k)sect_descs}; do
+      [[ $1 == [0-9]## ]] || continue
+      sect_descs+=( "${1}p" "${sect_descs[${1}p]} [POSIX]" )
+    done
+
+    # Add OS-specific stuff that's too risky for or overrides the general list
+    [[ $OSTYPE == darwin* ]] && sect_descs+=( n 'Tcl/Tk features' )
+    [[ $OSTYPE == solaris* ]] && sect_descs+=(
+      3m 'mathematical library functions'
+      4  'file formats / configuration'
+      5  'miscellanea'
+      7  'special files'
+      7d 'devices'
+      7i 'ioctl requests'
+      7p 'protocols'
+      9e 'driver entry points'
+      9f 'driver functions'
+      9p 'driver properties'
+      9s 'driver data structures'
+    )
+  }
+
   [[ $state == sects ]] && {
-    if (( ! $#sects )); then
+    local s
+    local -a specs
+
+    (( $#sects )) || {
       _message 'manual section'
       return 1
-    elif [[ $variant == (darwin|dragonfly|freebsd|linux)* ]]; then
-      _values -s: 'manual section' $sects
+    }
+
+    # Build specs from descriptions
+    for s in $sects; do
+      specs+=( "${s}[${sect_descs[$s]:--}]" )
+    done
+
+    if [[ $variant == (darwin|dragonfly|freebsd|linux)* ]]; then
+      _values -s: 'manual section' $specs
     elif [[ $variant == solaris* ]]; then
-      _values -s, 'manual section' $sects
+      _values -s, 'manual section' $specs
     else
-      _values 'manual section' $sects
+      _values 'manual section' $specs
     fi
     return
   }
 
   if zstyle -t ":completion:${curcontext}:manuals" separate-sections; then
-    local ret=1
+    local d ret=1
 
     (( $#sects )) || return 1
 
     _tags manuals.${^sects}
     while _tags; do
       for sect_dirname in $sects; do
-        _requested manuals.$sect_dirname expl "manual page, section $sect_dirname" _man_pages &&
+        d=$sect_dirname
+        (( $+sect_descs[$d] )) && d+=" (${sect_descs[$d]})"
+
+        _requested manuals.$sect_dirname expl "manual page, section $d" _man_pages &&
             ret=0
       done
       (( ret )) || return 0
