@@ -99,14 +99,14 @@ _opkg_arch_prio() {
   local -a copts=( "$@" )
   local -aU tmp
 
-  [[ -prefix *: ]] && {
+  compset -P 1 '*:' && {
     _message priority
     return
   }
 
   # Already configured arches
   tmp=( ${(f)"$( _call_program architectures $svc print-architecture )"} )
-  tmp=( ${${tmp##arch[ ]##}%% *} )
+  tmp=( ${(@)${(@)tmp##arch[ ]##}%% *} )
 
   tmp+=(
     # 'Meta' arches
@@ -145,8 +145,8 @@ _opkg_dest() {
   local -aU tmp
 
   tmp=( ${(f)"$( __opkg_grep_conf '^\s*dest\s+\S+\s+\S+' )"} )
-  tmp=( ${tmp##[[:space:]]#dest[[:space:]]##} )
-  tmp=( ${tmp%%[[:space:]]*} )
+  tmp=( ${(@)tmp##[[:space:]]#dest[[:space:]]##} )
+  tmp=( ${(@)tmp%%[[:space:]]*} )
 
   (( $#tmp )) || {
     _message destination
@@ -161,9 +161,14 @@ _opkg_dest_path() {
   local -a copts=( "$@" )
   local -aU tmp
 
+  compset -P 1 '*:' && {
+    _directories "$@"
+    return
+  }
+
   tmp=( ${(f)"$( __opkg_grep_conf '^\s*dest\s+\S+\s+\S+' )"} )
-  tmp=( ${tmp##[[:space:]]#dest[[:space:]]##} )
-  tmp=( ${tmp%%[[:space:]]*} )
+  tmp=( ${(@)tmp##[[:space:]]#dest[[:space:]]##} )
+  tmp=( ${(@)tmp%%[[:space:]]*} )
 
   (( $#tmp )) || {
     _message destination:path
