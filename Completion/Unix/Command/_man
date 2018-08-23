@@ -75,12 +75,12 @@ _man() {
     )
     [[ $variant == (dragonfly|freebsd)* ]] && args+=(
       # @todo Could enumerate these
-      '-m[search manual of specified architecture]:architecture'
+      '-m+[search manual of specified architecture]:architecture'
       '-o[use non-localized man pages]'
     )
     [[ $variant == (netbsd|openbsd)* ]] && args+=(
       '-c[disable paging]'
-      '-m[augment manual search path]:manual search path:_sequence -s\: _directories'
+      '-m+[augment manual search path]:manual search path:_sequence -s\: _directories'
       '(-a)-s+[specify manual section to search]: :->sects'
     )
     [[ $variant == linux* ]] && args+=(
