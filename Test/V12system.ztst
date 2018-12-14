@@ -1,0 +1,34 @@
+# Tests for the module zsh/system
+
+%prep
+  set +m # Make sure job control is disabled for PGID tests
+  zmodload zsh/system 2>/dev/null ||
+  ZTST_unimplemented='The module zsh/system is not available.'
+
+%test
+  pp=$sysparams[pid];  ( [[ $pp == $sysparams[pid]  ]] || print ok )
+  pp=$sysparams[ppid]; ( [[ $pp == $sysparams[ppid] ]] || print ok )
+0:sysparams[pid] and sysparams[ppid] reflect sub-shells
+>ok
+>ok
+
+  pp1=$sysparams[procsubstpid]
+  : <( : )
+  pp2=$sysparams[procsubstpid]
+  : <( : )
+  pp3=$sysparams[procsubstpid]
+  [[ $pp1 != $pp2 && $pp2 != $pp3 ]] && print ok
+0:sysparams[procsubstpid] reflects process substitutions
+>ok
+
+  [[ -n $sysparams[pgid] ]] && print ok
+  (
+    pp=$sysparams[pgid]
+    zsystem setpgrp
+    [[ $sysparams[pid] == $sysparams[pgid] ]] && print ok
+    [[ $pp == $sysparams[pgid] ]] || print ok
+  )
+0:zsystem setpgrp changes pgid to match pid
+>ok
+>ok
+>ok
