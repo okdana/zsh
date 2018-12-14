@@ -203,6 +203,22 @@ If the option tt(-r) is given, the lock is only for reading, otherwise
 it is for reading and writing.  The file descriptor is opened
 accordingly.
 )
+item(tt(zsystem setpgrp) [ tt(-q) ])(
+The builtin tt(zsystem)'s subcommand tt(setpgrp) sets the current
+shell or subshell's process group ID to its process ID, thus making
+it a process group leader. This is useful mainly in scripts; for
+example, after making a script process group leader it becomes
+possible to use tt(kill 0) to kill it and all of its child processes
+without potentially affecting its parents.
+
+The subcommand has no effect if the shell or subshell is already a
+process group leader. It may fail if the shell or subshell is already
+a session leader; the option tt(-q) can be used to suppress the
+resulting error message.
+
+Note that shells with job control enabled automatically make child
+processes into process group leaders.
+)
 item(tt(zsystem supports) var(subcommand))(
 The builtin tt(zsystem)'s subcommand tt(supports) tests whether a
 given subcommand is supported.  It returns status 0 if so, else
@@ -244,6 +260,10 @@ item(tt(sysparams))(
 A readonly associative array.  The keys are:
 
 startitem()
+item(tt(pgid))(
+vindex(pgid, sysparams)
+Returns the process group ID of the current process, even in subshells.
+)
 item(tt(pid))(
 vindex(pid, sysparams)
 Returns the process ID of the current process, even in subshells.  Compare
@@ -256,6 +276,7 @@ subshells.  Compare tt($PPID), which returns the process ID of the parent
 of the main shell process.
 )
 item(tt(procsubstpid))(
+vindex(procsubstpid, sysparams)
 Returns the process ID of the last process started for process
 substitution, i.e. the tt(<LPAR())var(...)tt(RPAR()) and
 tt(>LPAR())var(...)tt(RPAR()) expansions.

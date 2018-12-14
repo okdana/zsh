@@ -689,6 +689,45 @@ bin_zsystem_flock(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 }
 
 
+/**/
+static int
+bin_zsystem_setpgrp(char *nam, char **args,
+		    UNUSED(Options ops), UNUSED(int func))
+{
+    int quiet = 0;
+
+    while (*args && **args == '-') {
+	int opt;
+	char *optptr = *args + 1;
+	args++;
+	if (!*optptr || !strcmp(optptr, "-"))
+	    break;
+	while ((opt = *optptr)) {
+	    switch (opt) {
+	    case 'q':
+		/* suppress error messages */
+		quiet = 1;
+		break;
+	    default:
+		zwarnnam(nam, "setpgrp: unknown option: %c", *optptr);
+		return 1;
+	    }
+	    optptr++;
+	}
+    }
+    if (*args) {
+	zwarnnam(nam, "setpgrp: too many arguments");
+	return 1;
+    }
+    if (setpgrp(0, 0)) {
+	if (!quiet)
+	    zwarnnam(nam, "setpgrp: failed to set pgid: %e", errno);
+	return 1;
+    }
+    return 0;
+}
+
+
 /*
  * Return status zero if the zsystem feature is supported, else 1.
  * Operates silently for future-proofing.
@@ -714,6 +753,8 @@ bin_zsystem_supports(char *nam, char **args,
     if (!strcmp(*args, "flock"))
 	return 0;
 #endif
+    if (!strcmp(*args, "setpgrp"))
+	return 0;
     return 1;
 }
 
@@ -725,6 +766,8 @@ bin_zsystem(char *nam, char **args, Options ops, int func)
     /* If more commands are implemented, this can be more sophisticated */
     if (!strcmp(*args, "flock")) {
 	return bin_zsystem_flock(nam, args+1, ops, func);
+    } else if (!strcmp(*args, "setpgrp")) {
+	return bin_zsystem_setpgrp(nam, args+1, ops, func);
     } else if (!strcmp(*args, "supports")) {
 	return bin_zsystem_supports(nam, args+1, ops, func);
     }
@@ -770,6 +813,8 @@ fillpmsysparams(Param pm, const char *name)
     pm->gsu.s = &nullsetscalar_gsu;
     if (!strcmp(name, "pid")) {
 	num = (int)getpid();
+    } else if (!strcmp(name, "pgid")) {
+	num = (int)GETPGRP();
     } else if (!strcmp(name, "ppid")) {
 	num = (int)getppid();
     } else if (!strcmp(name, "procsubstpid")) {
@@ -803,6 +848,8 @@ scanpmsysparams(UNUSED(HashTable ht), ScanFunc func, int flags)
 {
     struct param spm;
 
+    fillpmsysparams(&spm, "pgid");
+    func(&spm.node, flags);
     fillpmsysparams(&spm, "pid");
     func(&spm.node, flags);
     fillpmsysparams(&spm, "ppid");
