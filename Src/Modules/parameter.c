@@ -61,6 +61,8 @@ paramtypestr(Param pm)
 	val = dupstring(val);
 	if (pm->level)
 	    val = dyncat(val, "-local");
+	if (pm->level && locallevel > pm->level)
+	    val = dyncat(val, "-local_outer");
 	if (f & PM_LEFT)
 	    val = dyncat(val, "-left");
 	if (f & PM_RIGHT_B)

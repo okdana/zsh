@@ -1142,6 +1142,10 @@ startitem()
 item(tt(local))(
 for local parameters
 )
+item(tt(local_outer))(
+for parameters made local outside of the current function scope (only
+appears together with tt(local))
+)
 item(tt(left))(
 for left justified parameters
 )

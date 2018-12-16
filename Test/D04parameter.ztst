@@ -749,6 +749,20 @@
 0:${(t)...}
 >scalar array association-local integer-local float-local
 
+  () {
+    local x=1 y=1
+    print -r - ${(t)x} ${(t)y}
+    () {
+      local x=1
+      print -r - ${(t)x} ${(t)y}
+    }
+    print -r - ${(t)x} ${(t)y}
+  }
+0:${(t)...} local levels
+>scalar-local scalar-local
+>scalar-local scalar-local-local_outer
+>scalar-local scalar-local
+
   # it's not quite clear that these are actually right unless you know
   # the algorithm:  search along the string for the point at which the
   # first (last) match occurs, for ## (%%), then take the shortest possible

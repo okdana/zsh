@@ -2540,6 +2540,8 @@ paramsubst(LinkList l, LinkNode n, char **str, int qt, int pf_flags,
 		val = dupstring(val);
 		if (v->pm->level)
 		    val = dyncat(val, "-local");
+		if (v->pm->level && locallevel > v->pm->level)
+		    val = dyncat(val, "-local_outer");
 		if (f & PM_LEFT)
 		    val = dyncat(val, "-left");
 		if (f & PM_RIGHT_B)
