@@ -104,6 +104,14 @@
 >ret: 0, optv: --aaa bar, opts: --aaa bar, argv: 1 2 3
 
   () {
+    local -a optv argvv=( -a -b -c 1 2 3 )
+    zparseopts -D -a optv -v argvv - a b c
+    print -r - ret: $?, optv: $optv, argvv: $argvv, argv: $argv
+  } -x -y -z 7 8 9
+0:zparseopts -v
+>ret: 0, optv: -a -b -c, argvv: 1 2 3, argv: -x -y -z 7 8 9
+
+  () {
     local -a optv aa ab
     zparseopts -a optv - a=aa b:=ab c:- z
     print -r - ret: $?, optv: $optv, aa: $aa, ab: $ab, argv: $argv

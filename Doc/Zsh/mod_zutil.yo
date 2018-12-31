@@ -180,7 +180,7 @@ item(tt(zregexparse))(
 This implements some internals of the tt(_regex_arguments) function.
 )
 findex(zparseopts)
-item(tt(zparseopts) [ tt(-D) tt(-E) tt(-F) tt(-K) tt(-M) ] [ tt(-a) var(array) ] [ tt(-A) var(assoc) ] [ tt(-) ] var(spec) ...)(
+item(tt(zparseopts) [ tt(-D) tt(-E) tt(-F) tt(-K) tt(-M) ] [ tt(-a) var(array) ] [ tt(-A) var(assoc) ] [ tt(-v) var(argv) ] [ tt(-) ] var(spec) ...)(
 This builtin simplifies the parsing of options in positional parameters,
 i.e. the set of arguments given by tt($*).  Each var(spec) describes one
 option and must be of the form `var(opt)[tt(=)var(array)]'.  If an option
@@ -306,6 +306,11 @@ which is used to choose where to store the values.  If no other var(spec)
 is found, the values are stored as usual.  This changes only the way the
 values are stored, not the way tt($*) is parsed, so results may be
 unpredictable if the `var(name)tt(+)' specifier is used inconsistently.
+)
+item(tt(-v) var(argv))(
+With this option, the elements of the named array var(argv) are used as the
+positional parameters to parse, rather than those given by tt($*).  The
+array may be modified according to the tt(-D) option.
 )
 enditem()
 
