@@ -6,13 +6,13 @@
 #   -0  Return also `0.0.0.0` and `::`
 #   -4  Return only IPv4 addresses
 #   -6  Return only IPv6 addresses
-#   -b  Return IPv6 addresses in brackets (for use with port numbers)
+#   -b  Complete IPv6 addresses with brackets (for use with port numbers)
 #   -h  Return also `localhost`
 #   -L  Exclude loop-back addresses (`127.0.0.0/8` and `::1`)
 #   -K  Exclude link-local addresses (`169.254.0.0/16` and `fe80::/10`)
 
-local MATCH MBEGIN MEND
-local -a expl tmp cmd=( ifconfig -a )
+local MATCH MBEGIN MEND ret=1
+local -a expl tmp ps cmd=( ifconfig -a )
 local -A opts
 
 zparseopts -A opts -D -E -- 0 4 6 b h L K
@@ -44,7 +44,18 @@ fi
   tmp=( ${(@)tmp:#(#i)fe[89ab]?:*} )
 }
 
-(( $+opts[-b] )) && tmp=( ${(@)tmp/(#m)*:*/\[$MATCH\]} )
+(( $+opts[-b] )) && ps=( -p\[ -s\] )
 (( $+opts[-h] )) && tmp+=( localhost )
 
-_wanted bind-addresses expl 'bind address' compadd -a "$@" - tmp
+_tags bind-addresses
+while _tags; do
+  _requested bind-addresses expl 'bind address' \
+    compadd -M 'm:{a-zA-Z}={A-Za-z} r:|[:.]=* r:|=*' "$@" - ${tmp:#*:*} \
+  && ret=0
+  _requested bind-addresses expl 'bind address' \
+    compadd -M 'm:{a-zA-Z}={A-Za-z} r:|[:.]=* r:|=*' $ps "$@" - ${(M)tmp:#*:*} \
+  && ret=0
+  (( ret )) || return 0
+done
+
+return ret
