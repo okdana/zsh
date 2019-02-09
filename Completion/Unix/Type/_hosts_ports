@@ -1,0 +1,71 @@
+#autoload
+
+# This function provides completion for host:port pairs. This sort of thing
+# would normally be done with _combination (or just manual compset juggling),
+# but it's helpful to have a dedicated function in this case due to the special
+# bracket notation used for IPv6 host:port pairs.
+#
+# Usage:
+#   _hosts_ports [<hosts command string> [<ports command string>]]
+#
+# If either command string is empty, the default is used.
+#
+# The default behaviour is equivalent to:
+#   _hosts_ports '_hosts -b' _ports
+
+local _suf
+local -a _cmd _copts
+
+zparseopts -D -E -a _copts -- V: J: 1 2 n f X: M: P: S: r: R: q F:
+
+# The PREFIX will be unquoted as expected if the word uses actual quotation
+# marks ('"), but not if it uses backslashes (\) — hence the leading * in these
+# \[*\] patterns
+if compset -P '([^\[:]##|*\[?*\]):'; then
+  _cmd=( "${(@z)2}" )
+  [[ -n $_cmd ]] || _cmd=( _ports )
+  _cmd=( "${_cmd[1]}" "${(@)_copts}" "${(@)_cmd[2,-1]}" )
+
+else
+  [[ ${(Q):-$PREFIX$SUFFIX} != *\[* || ${(Q):-$PREFIX$SUFFIX} == *\[*\]:* ]] &&
+  compset -S ':[^\]:.]#' || _suf=-qS:
+
+  _cmd=( "${(@z)1}" )
+  [[ -n $_cmd ]] || _cmd=( _hosts -b )
+  _cmd=( "${_cmd[1]}" "${(@)_copts}" "${(@)_cmd[2,-1]}" $_suf )
+fi
+
+eval "${(j< >)_cmd}"
+return
+
+
+
+###
+
+#autoload
+
+# This function provides completion for host:port pairs. This sort of thing
+# would normally be done with _combination (or just manual compset juggling),
+# but it's helpful to have a dedicated function in this case due to the special
+# bracket notation used for IPv6 host:port pairs.
+#
+# Usage:
+#   _hosts_ports [<hosts command string> [<ports command string>]]
+#
+# If either command string is empty, the default is used.
+#
+# The default behaviour is equivalent to:
+#   _hosts_ports '_hosts -b' _ports
+
+# The PREFIX will be unquoted as expected if the word uses actual quotation
+# marks ('"), but not if it uses backslashes (\) — hence the leading * in these
+# \[*\] patterns
+if compset -P '([^\[:]##|*\[?*\]):'; then
+  _ports "$@"
+else
+  [[ ${(Q):-$PREFIX$SUFFIX} != *\[* || ${(Q):-$PREFIX$SUFFIX} == *\[*\]:* ]] &&
+  compset -S 1 ':[^:.]#'
+  _hosts -b "$@" -qS:
+fi
+
+return
