@@ -16,7 +16,7 @@
 local _suf
 local -a _cmd _copts
 
-zparseopts -D -E -a _copts -- V: J: 1 2 n f X: M: P: S: r: R: q F:
+zparseopts -D -E -a _copts -- 1 2 f F: J: n M: P: q r: R: S: V: X:
 
 # The PREFIX will be unquoted as expected if the word uses actual quotation
 # marks ('"), but not if it uses backslashes (\) — hence the leading * in these
