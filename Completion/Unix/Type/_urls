@@ -121,15 +121,22 @@ case "$scheme" in
   ;;
 esac
 
-# Complete hosts
-if ! compset -P '(#b)([^:/]#)([:/])'; then
+# Complete hosts. The bracket stuff here is for handling IPv6 addresses; see
+# also _hosts_ports
+if ! compset -P '(#b)([^\[:/]##|*\[[^/]#\])([:/])'; then
   uhosts=($urls/$scheme/$PREFIX*$SUFFIX(/:t))
 
   _tags hosts
   while _tags; do
     while _next_label hosts expl host; do
-      compset -S '[:/]*' || suf="/"
-      (( $#uhosts )) || _hosts -S "$suf" -r '/:' "$expl[@]" && ret=0
+      if [[ ${(Q):-$PREFIX$SUFFIX} == *\[*\]:* ]]; then
+        compset -S 1 ':*' || suf="/"
+      elif [[ ${(Q):-$PREFIX$SUFFIX} == *\[* ]]; then
+        compset -S '/*' || suf="/"
+      else
+        compset -S '[:/]*' || suf="/"
+      fi
+      (( $#uhosts )) || _hosts -b -S "$suf" -r '/:' "$expl[@]" && ret=0
       [[ "$scheme" = http ]] && uhosts=($uhosts $localhttp_servername)
       compadd -S "$suf" -r '/:' "$expl[@]" -a uhosts && ret=0
     done
