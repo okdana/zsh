@@ -1,8 +1,15 @@
 #compdef ftp rwho rup xping traceroute aaaa zone mx ns soa txt
 
+# Options:
+#   -b  Complete IPv6 addresses with brackets (for use with port numbers)
+
 # avoid calling variable "hosts", it's an obvious candidate for use in
 #  zstyle -e '*' hosts 'reply=($hosts)'
-local expl _hosts tmp useip
+local expl _hosts tmp useip ps ipv6pat='(#i)[a-f0-9:.]#:[a-f0-9:.]#' ret=1
+local -A opts
+
+zparseopts -A opts -D -E -- b
+(( $+opts[-b] )) && ps=( -p\[ -s\] )
 
 if ! zstyle -a ":completion:${curcontext}:hosts" hosts _hosts; then
   if (( $+_cache_hosts == 0 )); then
@@ -74,5 +81,15 @@ if ! zstyle -a ":completion:${curcontext}:hosts" hosts _hosts; then
   _hosts=( "$_cache_hosts[@]" )
 fi
 
-_wanted hosts expl host \
-    compadd -M 'm:{a-zA-Z}={A-Za-z} r:|.=* r:|=*' -a "$@" - _hosts
+_tags hosts
+while _tags; do
+  _requested hosts expl host \
+    compadd -M 'm:{a-zA-Z}={A-Za-z} r:|[:.]=* r:|=*' "$@" - ${_hosts:#$~ipv6pat} \
+  && ret=0
+  _requested hosts expl host \
+    compadd -M 'm:{a-zA-Z}={A-Za-z} r:|[:.]=* r:|=*' $ps "$@" - ${(M)_hosts:#$~ipv6pat} \
+  && ret=0
+  (( ret )) || return 0
+done
+
+return ret
