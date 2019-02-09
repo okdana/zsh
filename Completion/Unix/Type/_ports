@@ -1,12 +1,86 @@
 #autoload
 
-local expl ports
+# Complete network port names/numbers
+#
+# Options:
+#   -N          Complete ports as numbers rather than names. This is disabled by
+#               default for historical reasons
+#   -t <array>  Specify the name of an array, or an array expression of the form
+#               '(pat1 pat2 ...)', containing patterns to match against protocol
+#               names (tcp, udp, etc.); only ports associated with matching
+#               protocols are completed. For historical reasons, and because
+#               many protocols have been assigned UDP port numbers even though
+#               they don't use UDP, the default behaviour is equivalent to:
+#               -t '(tcp)'
+#   -w <array>  As with -t, but the patterns are matched against port numbers
+#   -W <array>  As with -t, but the patterns are matched against port names
+#
+# Supported styles:
+#   numbers  Always complete numbers @todo
+#   ports    Override matches @todo
+#
 
-if ! zstyle -a ":completion:${curcontext}:" ports ports; then
-  (( $+_cache_ports )) ||
-      : ${(A)_cache_ports:=${${(M)${${(f)"$(</etc/services)"}:#\#*}#*/tcp}%%[ 	]*}}
+local -a match mend mbegin expl ports mprotocols mnumbers mnames
+local -A opts
 
-  ports=( "$_cache_ports[@]" )
+zparseopts -A opts -D -E -- N t: w: W:
+
+if zstyle -a ":completion:${curcontext}:" ports ports; then
+  _wanted ports expl port compadd -a "$@" - ports
+  return
 fi
 
-_wanted ports expl port compadd -a "$@" - ports
+(( $+_cache_ports )) || {
+  typeset -ga _cache_ports
+  _cache_ports=( ${(M)${(f)"$( < /etc/services )"}:#[^[:space:]#]*/*} )
+  _cache_ports=(
+    # number protocol name
+    ${_cache_ports/#(#b)([^[:space:]]##)[[:space:]]##(<->)\/([^[:space:]]##)*/$match[2] $match[3] $match[1]}
+  )
+  _cache_ports=( ${(on)_cache_ports} )
+}
+
+if [[ $opts[-t] == \(* ]]; then
+  mprotocols=( ${=${opts[-t]}[2,-2]} )
+elif [[ -n $opts[-t] ]]; then
+  for tmp in $=opts[-t]; do
+    mprotocols+=( ${(P)tmp} )
+  done
+else
+  mprotocols=( tcp )
+fi
+
+if [[ $opts[-w] == \(* ]]; then
+  mnumbers=( ${=${opts[-w]}[2,-2]} )
+elif [[ -n $opts[-w] ]]; then
+  for tmp in $=opts[-w]; do
+    mnumbers+=( ${(P)tmp} )
+  done
+fi
+
+if [[ $opts[-W] == \(* ]]; then
+  mnames=( ${=${opts[-W]}[2,-2]} )
+elif [[ -n $opts[-W] ]]; then
+  for tmp in $=opts[-W]; do
+    mnames+=( ${(P)tmp} )
+  done
+fi
+
+ports=( $_cache_ports )
+ports=( ${(M)ports:#* ${~:-(${(j<|>)mprotocols})} *} )
+(( $#mnumbers )) && ports=( ${(M)ports:#${~:-(${(j<|>)mnumbers})} *} )
+(( $#mnames   )) && ports=( ${(M)ports:#* ${~:-(${(j<|>)mnames})}} )
+
+if false; then # If not verbose
+  ports=( ${ports/ *} )
+  _wanted ports expl port compadd -a -2V "$@" - ports
+else
+  # Complete numbers
+  if (( $+opts[-N] )); then
+    ports=( ${ports/#(#b)(*) (*) (*)/${match[1]}:${match[2]}/${match[3]}} )
+  # Complete names
+  else
+    ports=( ${ports/#(#b)(*) (*) (*)/${match[3]}:${match[2]}/${match[1]}} )
+  fi
+  _describe -2V -t ports port ports
+fi
