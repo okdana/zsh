@@ -2,16 +2,24 @@
 
 # This function provides completion for host:port pairs. This sort of thing
 # would normally be done with _combination (or just manual compset juggling),
-# but it's helpful to have a dedicated function in this case due to the special
-# bracket notation used for IPv6 host:port pairs.
+# but it's helpful to have a dedicated function in this case to handle IPv6
+# bracket notation and selective port numbers.
 #
 # Usage:
 #   _hosts_ports [<hosts command string> [<ports command string>]]
 #
-# If either command string is empty, the default is used.
+# Instead of a ports command string, the form '(port1 port2 ...)' may be used,
+# which is a short-hand for '_ports -N "(port1 port2 ...)"'.
+#
+# If either command string is empty, the default is used. Thus, a function that
+# wants to offer a selection of useful port numbers (e.g., for a Web server)
+# may call the function like:
+#
+#   _hosts_ports '' '(80 81 8000 8080)'
 #
 # The default behaviour is equivalent to:
-#   _hosts_ports '_hosts -b' _ports
+#
+#   _hosts_ports '_hosts -b' '_ports -N'
 
 local _suf
 local -a _cmd _copts
@@ -22,19 +30,21 @@ zparseopts -D -E -a _copts -- 1 2 f F: J: n M: P: q r: R: S: V: X:
 # marks ('"), but not if it uses backslashes (\) — hence the leading * in these
 # \[*\] patterns
 if compset -P '([^\[:]##|*\[?*\]):'; then
-  _cmd=( "${(@z)2}" )
-  [[ -n $_cmd ]] || _cmd=( _ports )
-  _cmd=( "${_cmd[1]}" "${(@)_copts}" "${(@)_cmd[2,-1]}" )
-
+  if [[ $2 == \(*\) ]]; then
+    _cmd=( _ports -N ${(q+)2} )
+  else
+    _cmd=( "${(@z)2}" )
+    [[ -n $_cmd ]] || _cmd=( _ports -N )
+  fi
 else
-  [[ ${(Q):-$PREFIX$SUFFIX} != *\[* || ${(Q):-$PREFIX$SUFFIX} == *\[*\]:* ]] &&
-  compset -S ':[^\]:.]#' || _suf=-qS:
-
+  [[ $PREFIX$SUFFIX != *\[* || ${(Q):-$PREFIX$SUFFIX} == *\[*\]:* ]] && {
+    compset -S ':[^\]:.]#' || _suf=-qS:
+  }
   _cmd=( "${(@z)1}" )
   [[ -n $_cmd ]] || _cmd=( _hosts -b )
-  _cmd=( "${_cmd[1]}" "${(@)_copts}" "${(@)_cmd[2,-1]}" $_suf )
 fi
 
+_cmd=( "${_cmd[1]}" "${(@)_copts}" "${(@)_cmd[2,-1]}" $_suf )
 eval "${(j< >)_cmd}"
 return
 
