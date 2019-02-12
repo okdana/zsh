@@ -3,84 +3,46 @@
 # Complete network port names/numbers
 #
 # Options:
-#   -N          Complete ports as numbers rather than names. This is disabled by
-#               default for historical reasons
-#   -t <array>  Specify the name of an array, or an array expression of the form
-#               '(pat1 pat2 ...)', containing patterns to match against protocol
-#               names (tcp, udp, etc.); only ports associated with matching
-#               protocols are completed. For historical reasons, and because
-#               many protocols have been assigned UDP port numbers even though
-#               they don't use UDP, the default behaviour is equivalent to:
-#               -t '(tcp)'
-#   -w <array>  As with -t, but the patterns are matched against port numbers
-#   -W <array>  As with -t, but the patterns are matched against port names
+#   -N [<array>]  Complete port numbers rather than names. The optional <array>
+#                 argument may be either an array expression of the form
+#                 '(port1[:desc1] port2[:desc2] ...)', or the name of an array
+#                 containing the equivalent elements. With no argument or an
+#                 empty argument, no possibilities are offered (since it isn't
+#                 particularly useful to complete thousands of random numbers).
+#                 Name completion is used by default for historical reasons
 #
-# Supported styles:
-#   numbers  Always complete numbers @todo
-#   ports    Override matches @todo
-#
+# Styles:
+#   ports  Specify an array of port names/numbers to be offered for the given
+#          context
 
-local -a match mend mbegin expl ports mprotocols mnumbers mnames
+local tmp num
+local -a expl ports
 local -A opts
 
-zparseopts -A opts -D -E -- N t: w: W:
+zparseopts -A opts -D -E -- N::
 
 if zstyle -a ":completion:${curcontext}:" ports ports; then
-  _wanted ports expl port compadd -a "$@" - ports
-  return
-fi
-
-(( $+_cache_ports )) || {
-  typeset -ga _cache_ports
-  _cache_ports=( ${(M)${(f)"$( < /etc/services )"}:#[^[:space:]#]*/*} )
-  _cache_ports=(
-    # number protocol name
-    ${_cache_ports/#(#b)([^[:space:]]##)[[:space:]]##(<->)\/([^[:space:]]##)*/$match[2] $match[3] $match[1]}
-  )
-  _cache_ports=( ${(on)_cache_ports} )
-}
-
-if [[ $opts[-t] == \(* ]]; then
-  mprotocols=( ${=${opts[-t]}[2,-2]} )
-elif [[ -n $opts[-t] ]]; then
-  for tmp in $=opts[-t]; do
-    mprotocols+=( ${(P)tmp} )
-  done
-else
-  mprotocols=( tcp )
-fi
-
-if [[ $opts[-w] == \(* ]]; then
-  mnumbers=( ${=${opts[-w]}[2,-2]} )
-elif [[ -n $opts[-w] ]]; then
-  for tmp in $=opts[-w]; do
-    mnumbers+=( ${(P)tmp} )
-  done
-fi
-
-if [[ $opts[-W] == \(* ]]; then
-  mnames=( ${=${opts[-W]}[2,-2]} )
-elif [[ -n $opts[-W] ]]; then
-  for tmp in $=opts[-W]; do
-    mnames+=( ${(P)tmp} )
-  done
-fi
-
-ports=( $_cache_ports )
-ports=( ${(M)ports:#* ${~:-(${(j<|>)mprotocols})} *} )
-(( $#mnumbers )) && ports=( ${(M)ports:#${~:-(${(j<|>)mnumbers})} *} )
-(( $#mnames   )) && ports=( ${(M)ports:#* ${~:-(${(j<|>)mnames})}} )
-
-if false; then # If not verbose
-  ports=( ${ports/ *} )
-  _wanted ports expl port compadd -a -2V "$@" - ports
-else
-  # Complete numbers
-  if (( $+opts[-N] )); then
-    ports=( ${ports/#(#b)(*) (*) (*)/${match[1]}:${match[2]}/${match[3]}} )
-  # Complete names
-  else
-    ports=( ${ports/#(#b)(*) (*) (*)/${match[3]}:${match[2]}/${match[1]}} )
+  : # noop
+elif (( $+opts[-N] )); then
+  if [[ $opts[-N] == \(* ]]; then
+    ports=( ${=${opts[-N]}[2,-2]} )
+  elif [[ -n $opts[-N] ]]; then
+    for tmp in $=opts[-N]; do
+      ports+=( ${(P)tmp} )
+    done
   fi
-  _describe -2V -t ports port ports
+  ports=( ${(onu)ports} )
+  num=1
+else
+  (( $+_cache_ports )) ||
+  typeset -ga _cache_ports=(
+    ${${(M)${${(f)"$(</etc/services)"}:#\#*}#*/tcp}%%[[:space:]]*}
+  )
+  ports=( $_cache_ports )
+fi
+
+if (( num )); then
+  _describe -2Vx -t ports 'port number' ports "$@"
+else
+  _wanted ports expl port compadd -a "$@" - ports
 fi
