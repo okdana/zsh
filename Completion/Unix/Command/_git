@@ -197,8 +197,8 @@ _git-bisect () {
   declare -A opt_args
   local good bad
 
-  if good=$(_call_program commands git bisect terms --term-good); then
-    bad=$(_call_program commands git bisect terms --term-bad)
+  if good=$(_call_program commands $_git_cmd bisect terms --term-good); then
+    bad=$(_call_program commands $_git_cmd bisect terms --term-bad)
   else
     good=( good old ) bad=( new bad )
   fi
@@ -1518,7 +1518,7 @@ _git-reset () {
     (file)
       local tree=HEAD
       if zstyle -t :completion:${curcontext}: verbose; then
-        if ! tree=$(_call_program headed git rev-parse --verify HEAD); then
+        if ! tree=$(_call_program headed $_git_cmd rev-parse --verify HEAD); then
           # well-known sha1 of the empty tree
           tree=4b825dc642cb6eb9a060e54bf8d69288fbee4904
         fi
@@ -2753,7 +2753,7 @@ __git_config_option-or-value () {
 
   declare -a git_present_options # 'present' is an adjective
   git_present_options=(
-    ${${${(0)"$(_call_program gettable-options git config -z --list)"}%%$'\n'*}//:/\\:}
+    ${${${(0)"$(_call_program gettable-options $_git_cmd config -z --list)"}%%$'\n'*}//:/\\:}
   )
 
   # Add to $git_options options from the config file that aren't already in $git_options.
@@ -3023,7 +3023,7 @@ __git_config_option-or-value () {
       __git_config_sections -b '(|)' -a '(|)' '^color\.[^.]+\..*$' gettable-color-options option && ret=0
       ;;
     (value)
-      local current=${${(0)"$(_call_program current "git config $opt_args[(I)--system|--global|--local]" ${(kv)opt_args[(I)-f|--file]} "-z --get ${(q)line[1]}")"}#*$'\n'}
+      local current=${${(0)"$(_call_program current $_git_cmd config "$opt_args[(I)--system|--global|--local]" ${(kv)opt_args[(I)-f|--file]} "-z --get ${(q)line[1]}")"}#*$'\n'}
       case $line[1] in
         (alias.*)
           if [[ -n $current ]]; then
@@ -5633,7 +5633,7 @@ __git_is_initial_commit () {
 __git_is_in_middle_of_merge () {
   local gitdir
 
-  gitdir=$(_call_program gitdir git rev-parse --git-dir 2>/dev/null)
+  gitdir=$(_call_program gitdir $_git_cmd rev-parse --git-dir 2>/dev/null)
   __git_command_successful $pipestatus || return
 
   [[ -f $gitdir/MERGE_HEAD ]]
@@ -5652,7 +5652,7 @@ __git_describe_branch () {
     local __c
     local -a __commits
     for __c in ${(P)__commits_in}; do
-      __commits+=("${__c}:${$(_call_program describe git log -1 --oneline $__c)//:/\\:}")
+      __commits+=("${__c}:${$(_call_program describe $_git_cmd log -1 --oneline $__c)//:/\\:}")
     done
     _describe -t $__tag $__desc __commits "$@"
   else
@@ -5904,7 +5904,7 @@ __git_aliases () {
 (( $+functions[__git_extract_aliases] )) ||
 __git_extract_aliases () {
   local -a tmp
-  tmp=(${${(0)"$(_call_program aliases "git config -z --get-regexp '^alias.'")"}#alias.})
+  tmp=(${${(0)"$(_call_program aliases $_git_cmd config -z --get-regexp '\^alias\.')"}#alias.})
   if (( ${#tmp} > 0 )); then
       aliases=(${^tmp/$'\n'/:alias for \'}\')
   else
@@ -5950,7 +5950,7 @@ __git_merge_strategies () {
 
   _wanted merge-strategies expl 'merge strategy' compadd "$@" - \
       ${=${${${(M)${(f)"$(_call_program merge-strategies \
-      "git merge -s '' 2>&1")"}:#[Aa]vailable (custom )#strategies are: *}#[Aa]vailable (custom )#strategies are: }%.}:-octopus ours recursive resolve subtree}
+      $_git_cmd merge -s \'\' 2>&1)"}:#[Aa]vailable (custom )#strategies are: *}#[Aa]vailable (custom )#strategies are: }%.}:-octopus ours recursive resolve subtree}
 }
 
 (( $+functions[__git_encodings] )) ||
@@ -5981,7 +5981,7 @@ __git_apply_whitespace_strategies () {
 __git_remotes () {
   local remotes expl
 
-  remotes=(${(f)"$(_call_program remotes git remote 2>/dev/null)"})
+  remotes=(${(f)"$(_call_program remotes $_git_cmd remote 2>/dev/null)"})
   __git_command_successful $pipestatus || return 1
 
   _wanted remotes expl remote compadd "$@" -a - remotes
@@ -6061,7 +6061,7 @@ __git_archive_formats () {
   local expl
 
   _wanted archive-formats expl 'archive format' \
-    compadd $* - ${${(f)"$(_call_program archive-formats git archive --list)"}}
+    compadd $* - ${${(f)"$(_call_program archive-formats $_git_cmd archive --list)"}}
 }
 
 (( $+functions[__git_compression_levels] )) ||
@@ -6140,7 +6140,7 @@ __git_reflog_entries () {
 
   # Repeat the %gD on the RHS due to uniquify the matches, to avoid bad
   # completion list layout.  (Compare workers/34768)
-  reflog_entries=(${(f)"$(_call_program reflog-entries "git reflog -1000 --pretty='%gD:[%h] %gs (%gD)'" 2>/dev/null)"})
+  reflog_entries=(${(f)"$(_call_program reflog-entries $_git_cmd reflog -1000 --pretty='"%gD:[%h] %gs (%gD)"' 2>/dev/null)"})
   reflog_entries=( ${reflog_entries/HEAD@$'\x7b'/@$'\x7b'} )
   __git_command_successful $pipestatus || return 1
 
@@ -6287,7 +6287,7 @@ __git_stashes () {
   declare -a stashes
   declare -a descriptions
 
-  interleaved=(${(ps:\0:)"$(_call_program stashes git stash list -z --pretty='format:%gd%x00%s%x00\(%cr\)' 2>/dev/null)"})
+  interleaved=(${(ps:\0:)"$(_call_program stashes $_git_cmd stash list -z --pretty='format:%gd%x00%s%x00\(%cr\)' 2>/dev/null)"})
   __git_command_successful $pipestatus || return 1
   () {
     local i j k
@@ -6333,7 +6333,7 @@ __git_branch_names () {
   local expl
   declare -a branch_names
 
-  branch_names=(${${(f)"$(_call_program branchrefs git for-each-ref --format='"%(refname)"' refs/heads 2>/dev/null)"}#refs/heads/})
+  branch_names=(${${(f)"$(_call_program branchrefs $_git_cmd for-each-ref --format='"%(refname)"' refs/heads 2>/dev/null)"}#refs/heads/})
   __git_command_successful $pipestatus || return 1
 
   __git_describe_commit branch_names branch-names 'branch name' "$@"
@@ -6343,7 +6343,7 @@ __git_branch_names () {
 __git_remote_branch_names () {
   declare -a branch_names
 
-  branch_names=(${${(f)"$(_call_program remote-branch-refs git for-each-ref --format='"%(refname)"' refs/remotes 2>/dev/null)"}#refs/remotes/})
+  branch_names=(${${(f)"$(_call_program remote-branch-refs $_git_cmd for-each-ref --format='"%(refname)"' refs/remotes 2>/dev/null)"}#refs/remotes/})
   __git_command_successful $pipestatus || return 1
 
   __git_describe_commit branch_names remote-branch-names 'remote branch name' "$@"
@@ -6353,7 +6353,7 @@ __git_remote_branch_names () {
 __git_remote_branch_names_noprefix () {
   declare -a heads
 
-  branch_names=(${${${${(f)"$(_call_program remote-branch-refs-noprefix git for-each-ref --format='"%(refname)"' refs/remotes 2>/dev/null)"}#refs/remotes/}#*/}:#HEAD})
+  branch_names=(${${${${(f)"$(_call_program remote-branch-refs-noprefix $_git_cmd for-each-ref --format='"%(refname)"' refs/remotes 2>/dev/null)"}#refs/remotes/}#*/}:#HEAD})
   __git_command_successful $pipestatus || return 1
 
   __git_describe_commit branch_names remote-branch-names-noprefix 'remote branch name' "$@"
@@ -6383,7 +6383,7 @@ __git_recent_branches__names()
   # of that thread for why this implementation was chosen instead.
   #
   # Note: since we obtain the "from" part of the reflog, we only obtain heads, not tags.
-  reply=(${${(u)${${(M)${(0)"$(_call_program reflog git reflog -1000 -z --pretty='%gs')"}:#(#s)checkout: moving from *}#checkout: moving from }%% *}:#[0-9a-f](#c40)})
+  reply=(${${(u)${${(M)${(0)"$(_call_program reflog $_git_cmd reflog -1000 -z --pretty='%gs')"}:#(#s)checkout: moving from *}#checkout: moving from }%% *}:#[0-9a-f](#c40)})
 }
 
 (( $+functions[__git_recent_branches] )) ||
@@ -6391,7 +6391,7 @@ __git_recent_branches() {
   local -a branches
   local -A descriptions
   local -a reply
-  local -aU valid_ref_names_munged=( ${"${(f)"$(_call_program valid-ref-names 'git for-each-ref --format="%(refname)" refs/heads/')"}"#refs/heads/} )
+  local -aU valid_ref_names_munged=( ${"${(f)"$(_call_program valid-ref-names $_git_cmd for-each-ref --format='"%(refname)"' refs/heads/)"}"#refs/heads/} )
 
   # 1. Obtain names of recently-checked-out branches from the reflog.
   # 2. Remove ref names that no longer exist from the list.
@@ -6408,7 +6408,7 @@ __git_recent_branches() {
   # 4. Obtain log messages for all of them in one shot.
   # TODO: we'd really like --sort=none here...  but git doesn't support such a thing.
   # The \n removal is because for-each-ref prints a \n after each entry.
-  descriptions=( ${(0)"$(_call_program all-descriptions "git --no-pager for-each-ref --format='%(refname)%00%(subject)%00'" refs/heads/${(q)^branches} "--")"//$'\n'} )
+  descriptions=( ${(0)"$(_call_program all-descriptions $_git_cmd for-each-ref --format='"%(refname)%00%(subject)%00"' refs/heads/${(q)^branches} "--")"//$'\n'} )
 
   # 5. Synthesize the data structure _describe wants.
   local -a branches_colon_descriptions
@@ -6456,8 +6456,8 @@ __git_heads_local () {
   local f gitdir
   declare -a heads
 
-  heads=(${(f)"$(_call_program headrefs git for-each-ref --format='"%(refname:short)"' refs/heads 2>/dev/null)"})
-  gitdir=$(_call_program gitdir git rev-parse --git-dir 2>/dev/null)
+  heads=(${(f)"$(_call_program headrefs $_git_cmd for-each-ref --format='"%(refname:short)"' refs/heads 2>/dev/null)"})
+  gitdir=$(_call_program gitdir $_git_cmd rev-parse --git-dir 2>/dev/null)
   if __git_command_successful $pipestatus; then
     for f in HEAD FETCH_HEAD ORIG_HEAD MERGE_HEAD; do
       [[ -f $gitdir/$f ]] && heads+=$f
@@ -6473,7 +6473,7 @@ __git_heads_local () {
 __git_heads_remote () {
   declare -a heads
 
-  heads=(${(f)"$(_call_program headrefs git for-each-ref --format='"%(refname:short)"' refs/remotes 2>/dev/null)"})
+  heads=(${(f)"$(_call_program headrefs $_git_cmd for-each-ref --format='"%(refname:short)"' refs/remotes 2>/dev/null)"})
 
   __git_describe_commit heads heads-remote "remote head" "$@"
 }
@@ -6493,7 +6493,7 @@ __git_commit_objects () {
 
   # Note: the after-the-colon part must be unique across the entire array;
   # see workers/34768
-  commits=(${(f)"$(_call_program commits git --no-pager log -1000 --all --reflog --format='%h:\[%h\]\ %s\ \(%cr\)')"})
+  commits=(${(f)"$(_call_program commits $_git_cmd log -1000 --all --reflog --format='%h:\[%h\]\ %s\ \(%cr\)')"})
   __git_command_successful $pipestatus || return 1
 
   _describe -Vx -t commits 'commit object name' commits
@@ -6517,7 +6517,7 @@ __git_recent_commits () {
 
   # Careful: most %d will expand to the empty string.  Quote properly!
   # NOTE: we could use %D directly, but it's not available in git 1.9.1 at least.
-  commits=("${(f)"$(_call_program commits git --no-pager log ${(q)commit_opts} -20 --format='%h%n%d%n%s\ \(%cr\)%n%p')"}")
+  commits=("${(f)"$(_call_program commits $_git_cmd log ${(q)commit_opts} -20 --format='%h%n%d%n%s\ \(%cr\)%n%p')"}")
   __git_command_successful $pipestatus || return 1
 
   for i j k parents in "$commits[@]" ; do
@@ -6691,7 +6691,7 @@ __git_submodules () {
   local expl
   declare -a submodules
 
-  submodules=( ${${${(f)"$(_call_program submodules git submodule)"}#?* }%% *} )
+  submodules=( ${${${(f)"$(_call_program submodules $_git_cmd submodule)"}#?* }%% *} )
 
   _wanted submodules expl submodule compadd "$@" -a - submodules
 }
@@ -6703,7 +6703,7 @@ __git_tags () {
   local expl
   declare -a tags
 
-  tags=(${${(f)"$(_call_program tagrefs git for-each-ref --format='"%(refname)"' refs/tags 2>/dev/null)"}#refs/tags/})
+  tags=(${${(f)"$(_call_program tagrefs $_git_cmd for-each-ref --format='"%(refname)"' refs/tags 2>/dev/null)"}#refs/tags/})
   __git_command_successful $pipestatus || return 1
 
   _wanted tags expl tag compadd -M 'r:|/=* r:|=*' "$@" -a - tags
@@ -6726,7 +6726,7 @@ __git_tags_of_type () {
 
   type=$1; shift
 
-  tags=(${${(M)${(f)"$(_call_program ${(q)type}-tag-refs "git for-each-ref --format='%(*objecttype)%(objecttype) %(refname)' refs/tags 2>/dev/null")"}:#$type(tag|) *}#$type(tag|) refs/tags/})
+  tags=(${${(M)${(f)"$(_call_program ${(q)type}-tag-refs $_git_cmd for-each-ref --format='"%(*objecttype)%(objecttype) %(refname)"' refs/tags 2>/dev/null)"}:#$type(tag|) *}#$type(tag|) refs/tags/})
   __git_command_successful $pipestatus || return 1
 
   _wanted $type-tags expl "$type tag" compadd -M 'r:|/=* r:|=*' "$@" -a - tags
@@ -6747,7 +6747,7 @@ __git_references () {
   # an argument to the command (but default to "./." I suppose (why not "."?))
   # TODO: deal with GIT_DIR
   if [[ $_git_refs_cache_pwd != $PWD ]]; then
-    _git_refs_cache=(${${${(f)"$(_call_program references git ls-remote ./. 2>/dev/null)"}#*$'\t'}#refs/(heads|tags)/})
+    _git_refs_cache=(${${${(f)"$(_call_program references $_git_cmd ls-remote ./. 2>/dev/null)"}#*$'\t'}#refs/(heads|tags)/})
     __git_command_successful $pipestatus || return 1
     _git_refs_cache_pwd=$PWD
   fi
@@ -6761,7 +6761,7 @@ __git_local_references () {
   local expl
 
   if [[ $_git_local_refs_cache_pwd != $PWD ]]; then
-    _git_local_refs_cache=(${${${(f)"$(_call_program references git ls-remote ./. 2>/dev/null)"}#*$'\t'}#refs/})
+    _git_local_refs_cache=(${${${(f)"$(_call_program references $_git_cmd ls-remote ./. 2>/dev/null)"}#*$'\t'}#refs/})
     __git_command_successful $pipestatus || return 1
     _git_local_refs_cache_pwd=$PWD
   fi
@@ -6779,7 +6779,7 @@ __git_notes_refs () {
   local expl
   declare -a notes_refs
 
-  notes_refs=(${${(f)"$(_call_program notes-refs git for-each-ref --format='"%(refname)"' refs/notes 2>/dev/null)"}#$type refs/notes/})
+  notes_refs=(${${(f)"$(_call_program notes-refs $_git_cmd for-each-ref --format='"%(refname)"' refs/notes 2>/dev/null)"}#$type refs/notes/})
   __git_command_successful $pipestatus || return 1
 
   _wanted notes-refs expl 'notes ref' compadd "$@" -a - notes_refs
@@ -6791,7 +6791,7 @@ __git_notes_refs () {
 __git_files_relative () {
   local files file f_parts prefix p_parts tmp
 
-  prefix=$(_call_program gitprefix git rev-parse --show-prefix 2>/dev/null)
+  prefix=$(_call_program gitprefix $_git_cmd rev-parse --show-prefix 2>/dev/null)
   __git_command_successful $pipestatus || return 1
 
   if (( $#prefix == 0 )); then
@@ -6828,10 +6828,10 @@ __git_files () {
   zparseopts -D -E -a opts -- -cached -deleted -modified -others -ignored -unmerged -killed x+: --exclude+:
   tag=$1 description=$2; shift 2
 
-  gitcdup=$(_call_program gitcdup git rev-parse --show-cdup 2>/dev/null)
+  gitcdup=$(_call_program gitcdup $_git_cmd rev-parse --show-cdup 2>/dev/null)
   __git_command_successful $pipestatus || return 1
 
-  gitprefix=$(_call_program gitprefix git rev-parse --show-prefix 2>/dev/null)
+  gitprefix=$(_call_program gitprefix $_git_cmd rev-parse --show-prefix 2>/dev/null)
   __git_command_successful $pipestatus || return 1
 
   # TODO: --directory should probably be added to $opts when --others is given.
@@ -6839,12 +6839,12 @@ __git_files () {
   local pref=$gitcdup$gitprefix$PREFIX
 
   # First allow ls-files to pattern-match in case of remote repository
-  files=(${(0)"$(_call_program files git ls-files -z --exclude-standard ${(q)opts} -- ${(q)${pref:+$pref\*}:-.} 2>/dev/null)"})
+  files=(${(0)"$(_call_program files $_git_cmd ls-files -z --exclude-standard ${(q)opts} -- ${(q)${pref:+$pref\*}:-.} 2>/dev/null)"})
   __git_command_successful $pipestatus || return
 
   # If ls-files succeeded but returned nothing, try again with no pattern
   if [[ -z "$files" && -n "$pref" ]]; then
-    files=(${(0)"$(_call_program files git ls-files -z --exclude-standard ${(q)opts} -- 2>/dev/null)"})
+    files=(${(0)"$(_call_program files $_git_cmd ls-files -z --exclude-standard ${(q)opts} -- 2>/dev/null)"})
     __git_command_successful $pipestatus || return
   fi
 
@@ -6898,7 +6898,7 @@ __git_diff-index_files () {
   local files expl
 
   # $tree needs to be escaped for _call_program; matters for $tree = "HEAD^"
-  files=$(_call_program files git diff-index -z --name-only --no-color --cached ${(q)tree} 2>/dev/null)
+  files=$(_call_program files $_git_cmd diff-index -z --name-only --no-color --cached ${(q)tree} 2>/dev/null)
   __git_command_successful $pipestatus || return 1
   files=(${(0)"$(__git_files_relative $files)"})
   __git_command_successful $pipestatus || return 1
@@ -6921,7 +6921,7 @@ __git_treeish-to-index_files () {
 __git_changed-in-working-tree_files () {
   local files expl
 
-  files=$(_call_program changed-in-working-tree-files git diff -z --name-only --no-color 2>/dev/null)
+  files=$(_call_program changed-in-working-tree-files $_git_cmd diff -z --name-only --no-color 2>/dev/null)
   __git_command_successful $pipestatus || return 1
   files=(${(0)"$(__git_files_relative $files)"})
   __git_command_successful $pipestatus || return 1
@@ -6961,7 +6961,7 @@ __git_tree_files () {
   shift
   (( at_least_one_tree_added = 0 ))
   for tree in $*; do
-    tree_files+=(${(ps:\0:)"$(_call_program tree-files git ls-tree -r ${(q)extra_args} --name-only -z ${(q)tree} 2>/dev/null)"})
+    tree_files+=(${(ps:\0:)"$(_call_program tree-files $_git_cmd ls-tree -r ${(q)extra_args} --name-only -z ${(q)tree} 2>/dev/null)"})
     __git_command_successful $pipestatus && (( at_least_one_tree_added = 1 ))
   done
 
@@ -7010,7 +7010,7 @@ __git_current_remote_urls () {
   local expl
   _description remote-urls expl 'current url'
   compadd "$expl[@]" -M 'r:|/=* r:|=*' - ${(f)"$(_call_program remote-urls
-      git remote get-url "$@" --all)"}
+      $_git_cmd remote get-url "$@" --all)"}
 }
 
 (( $+functions[__git_any_repositories] )) ||
@@ -7050,7 +7050,7 @@ __git_guard () {
 
 __git_guard_branch-name () {
   if [[ -n $PREFIX$SUFFIX ]]; then
-    _call_program check-ref-format git check-ref-format "refs/heads/"${(q)PREFIX}${(q)SUFFIX} &>/dev/null
+    _call_program check-ref-format $_git_cmd check-ref-format "refs/heads/"${(q)PREFIX}${(q)SUFFIX} &>/dev/null
     (( ${#pipestatus:#0} > 0 )) && return 1
   fi
 
@@ -7487,7 +7487,7 @@ __git_config_get_regexp () {
   [[ -n $opts[-a] ]] || opts[-a]='.[^.]##'
   [[ $1 == -- ]] && shift
 
-  set -A $2 ${${${(0)"$(_call_program ${3:-$2} "git config -z --get-regexp -- ${(q)1}")"}#${~opts[-b]}}%%${~opts[-a]}$'\n'*}
+  set -A $2 ${${${(0)"$(_call_program ${3:-$2} $_git_cmd config -z --get-regexp -- ${(q)1})"}#${~opts[-b]}}%%${~opts[-a]}$'\n'*}
 }
 
 (( $+functions[__git_config_sections] )) ||
@@ -7604,7 +7604,7 @@ __git_browsers () {
 }
 
 __git_worktrees () {
-  local -a records=( ${(ps.\n\n.)"$(_call_program directories git worktree list --porcelain)"} )
+  local -a records=( ${(ps.\n\n.)"$(_call_program directories $_git_cmd worktree list --porcelain)"} )
   local -a directories descriptions
   local i hash branch
   for i in $records; do
@@ -7724,7 +7724,7 @@ __git_remotes_groups () {
   local expl
 
   _wanted remotes-groups expl 'remotes group' \
-    compadd $* - ${${${(0)"$(_call_program remotes-groups git config --get-regexp -z '"^remotes\..*$"')"}%%$'\n'*}#remotes.}
+    compadd $* - ${${${(0)"$(_call_program remotes-groups $_git_cmd config --get-regexp -z '"^remotes\..*$"')"}%%$'\n'*}#remotes.}
 
 }
 
@@ -7787,11 +7787,26 @@ __git_color_attributes () {
 
 # Now, for the main drive...
 _git() {
+  # $_git_cmd can be used with e.g. _call_program to call the right git with a
+  # safe configuration
+  (( $+_git_cmd )) || {
+    local -a _git_cmd
+
+    if [[ $service == git ]]; then
+      _git_cmd=( $words[1] )
+    else
+      _git_cmd=( git )
+    fi
+
+    _git_cmd+=( -c log.showSignature=false )
+    _git_cmd+=( --no-pager )
+  }
+
   if (( CURRENT > 2 )); then
     local -a aliases
     local -A git_aliases
     local a k v
-    aliases=(${(0)"$(_call_program aliases git config -z --get-regexp '\^alias\.')"})
+    aliases=(${(0)"$(_call_program aliases $_git_cmd config -z --get-regexp '\^alias\.')"})
     for a in ${aliases}; do
         k="${${a/$'\n'*}/alias.}"
         v="${a#*$'\n'}"
