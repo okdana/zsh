@@ -183,8 +183,8 @@ __pgsql_cfg_params() {
   local conninfo
   local -a expl tmp
 
-  __pgsql_get_conninfo -O dbname
-  __pgsql_call_psql tmp databases "$conninfo" -c '
+  __pgsql_get_conninfo
+  __pgsql_call_psql tmp parameters "$conninfo" -c '
     SELECT name
     FROM   pg_catalog.pg_settings;
   '
