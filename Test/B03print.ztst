@@ -313,6 +313,11 @@
 >    one two three   four
 >        one     two     three       four
 
+ # `typeset -p` formatting differs without multibyte
+ ZTST_multibyte || {
+   ZTST_skip='no UTF-8 locale or multibyte mode is not implemented'
+   return
+ }
  unset foo
  print -v foo once more
  typeset -p foo

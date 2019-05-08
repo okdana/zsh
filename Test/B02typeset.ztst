@@ -285,6 +285,11 @@
 >0x61
 >l o c a
 
+ # `typeset -p` formatting differs without multibyte
+ ZTST_multibyte || {
+   ZTST_skip='no UTF-8 locale or multibyte mode is not implemented'
+   return
+ }
  typeset -T SCALAR=$'l\000o\000c\000a\000l' array $'\000'
  typeset -U SCALAR
  print $array
@@ -1101,3 +1106,16 @@
 >export zsh_exported_readonly_scalar=1
 >readonly zsh_exported_readonly_array=( 2 )
 >readonly zsh_exported_readonly_scalar=1
+
+# Quoting of values for `typeset -p` should match the behaviour of the (q+)
+# flag, which differs depending on multibyte support
+ ZTST_multibyte || {
+   ZTST_skip='no UTF-8 locale or multibyte mode is not implemented'
+   return
+ }
+ local x='foo bar' y=$'foo\tbar'
+ typeset -p x
+ typeset -p y
+0:typeset -p quoting
+>typeset x='foo bar'
+>typeset y=$'foo\tbar'

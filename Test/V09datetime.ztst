@@ -74,9 +74,9 @@
 >1
 >OK
 
-  print -r -- ${(V)"$(strftime $'%Y\0%m\0%d' 100000000)"}
+  print -r -- ${(qqqq)"$(strftime $'%Y\0%m\0%d' 100000000)"}
 0:Embedded nulls
->1973^@03^@03
+>$'1973\00003\00003'
 
 # We assume '%@' is not a valid format on any OSs.
 # The result can be '%@' (Linux), '@' (BSDs) or an error (Cygwin).

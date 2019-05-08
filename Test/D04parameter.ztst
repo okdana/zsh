@@ -415,6 +415,11 @@
 0:${(C)...}
 >Instead Here I Am Stuck By The Computer
 
+# (V) output differs depending on multibyte support
+  ZTST_multibyte || {
+    ZTST_skip='no UTF-8 locale or multibyte mode is not implemented'
+    return
+  }
   foo=$'\x7f\x00'
   print -r -- ${(V)foo}
 0:${(V)...}
@@ -1975,6 +1980,11 @@
 >1 /somewhere
 >2 /random /value
 
+# See A03 and B02 re: multibyte requirements for this quoting mechanism
+  ZTST_multibyte || {
+    ZTST_skip='no UTF-8 locale or multibyte mode is not implemented'
+    return
+  }
   print -r -- ${(q+):-}
   print -r -- ${(q+)IFS}
   print -r -- ${(q+):-oneword}

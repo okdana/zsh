@@ -79,6 +79,12 @@
 0:$'' should not be elided, in common with other empty quotes
 >3
 
+# Full (q+) functionality requires multibyte mode; without it, (q+) is
+# effectively the same as (qq)
+ ZTST_multibyte || {
+   ZTST_skip='no UTF-8 locale or multibyte mode is not implemented'
+   return
+ }
  foo=$'one\\two\n\'buckle\'\tmy\\shoe\n'
  print -r ${(q+)foo}
 0:Extended minimal quoting of quotes and backslashes

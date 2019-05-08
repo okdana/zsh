@@ -62,6 +62,42 @@ ZTST_testname=$1
 
 integer ZTST_testfailed
 
+# Enable/detect multibyte support. Note that this function globally enables
+# the multibyte option and sets LANG; run in a subshell if this would pollute
+# other tests
+ZTST_multibyte() {
+  setopt multibyte
+
+  if (( ! $+ZTST_mb_locale )); then
+    # Cache result
+    typeset -g ZTST_mb_locale
+
+    # Don't let LC_* override our choice of locale
+    local old_LANG \
+      LC_ALL LC_ADDRESS LC_COLLATE LC_CTYPE LC_IDENTIFICATION LC_MEASUREMENT \
+      LC_MESSAGES LC_MONETARY LC_NAME LC_NUMERIC LC_PAPER LC_TELEPHONE LC_TIME
+    local -a langs=(en_{US,GB}.{UTF-,utf}8 en.UTF-8
+                    $(locale -a 2>/dev/null | egrep 'utf8|UTF-8'))
+
+    old_LANG=$LANG
+
+    for LANG in $langs; do
+      if [[ é = ? ]]; then
+        ZTST_mb_locale=$LANG
+        break
+      fi
+    done
+
+    # Paranoid, possibly unnecessary
+    [[ -n $ZTST_mb_locale ]] || LANG=$old_LANG
+  fi
+
+  (( $# )) && : ${(P)1::=$ZTST_mb_locale}
+
+  [[ -n $ZTST_mb_locale ]]
+  return
+}
+
 # This is POSIX nonsense.  Because of the vague feeling someone, somewhere
 # may one day need to examine the arguments of "tail" using a standard
 # option parser, every Unix user in the world is expected to switch

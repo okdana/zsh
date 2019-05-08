@@ -3,15 +3,8 @@
 # into bindings.  The latter is particularly tricky with multibyte sequences.
 
 %prep
-  ZSH_TEST_LANG=
-  langs=(en_{US,GB}.{UTF-,utf}8 en.UTF-8
-	 $(locale -a 2>/dev/null | egrep 'utf8|UTF-8'))
-  for LANG in $langs; do
-    if [[ é = ? ]]; then
-      ZSH_TEST_LANG=$LANG
-      break;
-    fi
-  done
+
+  ZTST_multibyte ZSH_TEST_LANG
   if [[ $OSTYPE = cygwin ]]; then
     ZTST_unimplemented="the zsh/zpty module does not work on Cygwin"
   elif ( zmodload zsh/zpty 2>/dev/null ); then
