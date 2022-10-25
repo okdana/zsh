@@ -1,3 +1,7 @@
+2022-10-25  Axel Beckert  <abe@deuxchevaux.org.org>
+
+	* 50840: Doc/Zsh/grammar.yo: Correct NO_MATCH to NOMATCH.
+
 2022-10-22  Bart Schaefer  <schaefer@Macadamia>
 
 	* 50714: Completion/Unix/Command/_git (_git-diff): also complete
