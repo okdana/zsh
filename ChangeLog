@@ -1,3 +1,8 @@
+2023-03-27  Oliver Kiddle  <opk@zsh.org>
+
+	* Shohei YOSHIDA: 51589: Completion/Unix/Command/_nm:
+	Update nm options
+
 2023-03-16  Oliver Kiddle  <opk@zsh.org>
 
 	* 51583: Completion/Unix/Command/_git: update completion of
