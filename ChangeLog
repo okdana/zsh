@@ -1,3 +1,7 @@
+2024-03-02  Bart Schaefer  <schaefer@zsh.org>
+
+	* JunT.: 52635: Test/runtests.zsh: show file name when crashed
+
 2024-02-24  Bart Schaefer  <schaefer@zsh.org>
 
 	* 52596: Src/exec.c: metafy interpreter name for error message
