@@ -1,3 +1,8 @@
+2024-03-18  Oliver Kiddle  <opk@zsh.org>
+
+	* 52769: Completion/Unix/Command/_ansible: fix completion of
+	ansible keywords and --step option
+
 2024-03-14  Bart Schaefer  <schaefer@zsh.org>
 
 	* 52752: Src/params.c, Test/B02typeset.ztst: more typeset -p fixes
