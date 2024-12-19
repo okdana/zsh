@@ -1713,6 +1713,7 @@ static int
 bin_zparseopts(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 {
     char *o, *p, *n, **pp, **aval, **ap, *assoc = NULL, **cp, **np;
+    char *paramsname = NULL, **params;
     int del = 0, flags = 0, extract = 0, fail = 0, keep = 0;
     Zoptdesc sopts[256], d;
     Zoptarr a, defarr = NULL;
@@ -1803,6 +1804,20 @@ bin_zparseopts(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 		    assoc = o + 2;
 		else if (*args)
 		    assoc = *args++;
+		else {
+		    zwarnnam(nam, "missing array name");
+		    return 1;
+		}
+		break;
+	    case 'v':
+		if (paramsname) {
+		    zwarnnam(nam, "argv array given more than once");
+		    return 1;
+		}
+		if (o[2])
+		    paramsname = o + 2;
+		else if (*args)
+		    paramsname = *args++;
 		else {
 		    zwarnnam(nam, "missing array name");
 		    return 1;
@@ -1901,7 +1916,8 @@ bin_zparseopts(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 	    return 1;
 	}
     }
-    np = cp = pp = ((extract && del) ? arrdup(pparams) : pparams);
+    params = getaparam((paramsname = paramsname ? paramsname : "argv"));
+    np = cp = pp = ((extract && del) ? arrdup(params) : params);
     for (; (o = *pp); pp++) {
 	if (*o != '-') {
 	    if (extract) {
@@ -2041,12 +2057,9 @@ bin_zparseopts(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
     if (del) {
 	if (extract) {
 	    *cp = NULL;
-	    freearray(pparams);
-	    pparams = zarrdup(np);
+	    setaparam(paramsname, zarrdup(np));
 	} else {
-	    pp = zarrdup(pp);
-	    freearray(pparams);
-	    pparams = pp;
+	    setaparam(paramsname, zarrdup(pp));
 	}
     }
     return 0;
