@@ -1528,13 +1528,14 @@ struct zoptdesc {
     Zoptval vals, last;
 };
 
-#define ZOF_ARG  1
-#define ZOF_OPT  2
-#define ZOF_MULT 4
-#define ZOF_SAME 8
-#define ZOF_MAP 16
-#define ZOF_CYC 32
-#define ZOF_GNU 64
+#define ZOF_ARG    1
+#define ZOF_OPT    2
+#define ZOF_MULT   4
+#define ZOF_SAME   8
+#define ZOF_MAP   16
+#define ZOF_CYC   32
+#define ZOF_GNUS  64
+#define ZOF_GNUL 128
 
 struct zoptarr {
     Zoptarr next;
@@ -1572,10 +1573,10 @@ lookup_opt(char *str)
     for (p = opt_descs; p; p = p->next) {
 	/*
 	 * Option takes argument, with GNU-style handling of =. This should only
-	 * be set for doubly hyphenated long options, though we don't care about
-	 * that here. Unlike the default behaviour, matching is unambiguous
+	 * be set for long options, though we don't care about that here. Unlike
+	 * the default behaviour, matching is unambiguous
 	 */
-	if (p->flags & ZOF_GNU) {
+	if (p->flags & ZOF_GNUL) {
 	    if (!strcmp(p->name, str) || /* Inefficient, whatever */
 		    (strpfx(p->name, str) && str[strlen(p->name)] == '='))
 		return p;
@@ -1667,7 +1668,7 @@ add_opt_val(Zoptdesc d, char *arg)
 
 	*s = '-';
 	strcpy(s + 1, d->name);
-	if (d->flags & ZOF_GNU)
+	if (d->flags & ZOF_GNUL)
 	    strcat(s, "=");
 	strcat(s, arg);
 	v->str = s;
@@ -1896,9 +1897,8 @@ bin_zparseopts(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 	if (*p == ':') {
 	    f |= ZOF_ARG;
 	    *p = '\0';
-	    /* GNU setting applies only to doubly hyphenated options */
-	    if (*o == '-' && gnu) {
-		f |= ZOF_GNU;
+	    if (gnu) {
+		f |= o[1] ? ZOF_GNUL : ZOF_GNUS;
 	    }
 	    if (*++p == ':') {
 		p++;
@@ -1990,9 +1990,13 @@ bin_zparseopts(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 		    if (o[1]) {
 			add_opt_val(d, o + 1);
 			break;
-		    /* Optarg in next parameter */
+		    /*
+		     * Mandatory optarg or (if not GNU style) optional optarg in
+		     * next parameter
+		     */
 		    } else if (!(d->flags & ZOF_OPT) ||
-			       (pp[1] && pp[1][0] != '-')) {
+			       (!(d->flags & (ZOF_GNUL | ZOF_GNUS)) &&
+			        pp[1] && pp[1][0] != '-')) {
 			if (!pp[1]) {
 			    zwarnnam(nam, "missing argument for option: -%s",
 				    d->name);
@@ -2020,12 +2024,12 @@ bin_zparseopts(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 		char *e = o + strlen(d->name) + 1;
 
 		/* GNU style allows an empty optarg in the same parameter */
-		if ((d->flags & ZOF_GNU) && *e == '=') {
+		if ((d->flags & ZOF_GNUL) && *e == '=') {
 		    add_opt_val(d, ++e);
 		/*
 		 * Non-empty optarg in same parameter. lookup_opt() test ensures
-		 * that this won't be a GNU-style option, where this would be
-		 * invalid
+		 * that this won't be a GNU-style long option, where this would
+		 * be invalid
 		 */
 		} else if (*e) {
 		    add_opt_val(d, e);
@@ -2034,7 +2038,8 @@ bin_zparseopts(char *nam, char **args, UNUSED(Options ops), UNUSED(int func))
 		 * next parameter
 		 */
 		} else if (!(d->flags & ZOF_OPT) ||
-			 (!(d->flags & ZOF_GNU) && pp[1] && pp[1][0] != '-')) {
+			 (!(d->flags & (ZOF_GNUL | ZOF_GNUS)) &&
+			  pp[1] && pp[1][0] != '-')) {
 		    if (!pp[1]) {
 			zwarnnam(nam, "missing argument for option: -%s",
 				d->name);

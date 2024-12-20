@@ -339,24 +339,30 @@ its required argument always aborts parsing and returns an error as described
 above regardless of whether this option is used.
 )
 item(tt(-G))(
-This option specifies that doubly hyphenated long options that take an
-argument are parsed in the GNU style. That is, given the var(spec)
-`tt(-foo:)', the positional parameter `tt(-)tt(-foo=bar)' is interpreted
-as option `tt(-)tt(-foo)' with argument `tt(bar)', rather than argument
-`tt(=bar)' as is the default, whilst the positional parameter
-`tt(-)tt(-foobar)' is considered an unknown option (unless another
-var(spec) describes it).
+This option specifies that options are parsed in the GNU style,
+similar to tt(getopt_long+LPAR()3+RPAR()). In particular:
 
-When this option is in effect, it is possible to supply an empty
-option-argument in the same parameter as its option using a trailing
-`tt(=)'. An optional argument to a long option must be given with the
-equals syntax; the following parameter is considered unrelated. Lastly,
-whenever a long option and its argument are stored in the same array
+Given the var(spec) `tt(-foo:)', the positional parameter
+`tt(-)tt(-foo=bar)' is interpreted as option `tt(-)tt(-foo)' with
+argument `tt(bar)', rather than argument `tt(=bar)' as is the default,
+whilst the positional parameter `tt(-)tt(-foobar)' is considered an
+unknown option (unless another var(spec) describes it). This applies
+to both singly and doubly hyphenated long options.
+
+An empty option-argument can be given to its long option in the same
+parameter using a trailing `tt(=)'.
+
+An optional argument to a long option must be given with the
+equals syntax, and an optional argument to a short option must
+follow it immediately in the same parameter; in both cases the
+following parameter is considered unrelated.
+
+Whenever a long option and its argument are stored in the same array
 element, an `tt(=)' is used to separate them.
 
 A mandatory option-argument given in a separate parameter from its
 option (as in `tt(-)tt(-foo) tt(bar)'), or any option-argument given to
-a singly hyphenated (short) option, is always treated the same
+a short option in the same parameter, is always treated the same
 regardless of whether this option is in effect.
 )
 item(tt(-K))(
