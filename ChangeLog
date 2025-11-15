@@ -1,3 +1,8 @@
+2025-11-17  Oliver Kiddle  <opk@zsh.org>
+
+	* Christopher Bock: 54080 (tweaked): Completion/Debian/Command/_bts:
+	update tags in bts completion
+
 2025-11-16  dana  <dana@dana.is>
 
 	* 53671: Src/hist.c, Test/D02glob.ztst: hist: untokenise input
