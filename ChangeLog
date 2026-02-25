@@ -1,3 +1,8 @@
+2026-04-05  Oliver Kiddle  <opk@zsh.org>
+
+	* Ronan Pigott: 54208: Completion/Unix/Command/_cp:
+	allow multiple --preserve flags
+
 2026-04-03  Jun-ichi Takimoto  <takimoto-j@kba.biglobe.ne.jp>
 
 	* Eisuke Kawashima: github #163: Completion/Unix/Command/_ssh:
